@@ -21,19 +21,20 @@ namespace CdbgExpr
             PARENTHESIS,
             ARRAY_ACCESS,
             STRUCT_ACCESS,
-            ASSIGNMENT
+            ASSIGNMENT,
+            FUNCTION_CALL,
         };
 
-
-        struct Token {
+        struct Token
+        {
             TokenType type;
             std::string value;
-            std::vector<Token> children;
         };
 
         Expression(const std::string &expr, DbgData *dbgData)
             : expr_(expr), pos_(0), dbgData(dbgData), assignmentAllowed_(false)
         {
+            SymbolDescriptor::data = dbgData;
         }
         ~Expression();
 
@@ -47,16 +48,13 @@ namespace CdbgExpr
         std::vector<Token> tokens;
 
         void tokenize(const std::string &expr);
-        void tokenizeNested(const std::string& expr, Token& token);
+        std::vector<Token> convertToPostfix(const std::vector<Token> &tokens);
+        int getPrecedence(const Token &token);
         SymbolDescriptor parseExpression();
-        SymbolDescriptor parseExpression(std::vector<Token> &tokens);
-        SymbolDescriptor parseTerm(std::vector<Token> &tokens);
-        SymbolDescriptor parseFactor(std::vector<Token> &tokens);
-        SymbolDescriptor parseAssignment();
-        SymbolDescriptor parseArrayAccess(SymbolDescriptor symbol, std::vector<Token> &tokens);
-        SymbolDescriptor parseStructAccess(SymbolDescriptor symbol, std::vector<Token> &tokens);
-        SymbolDescriptor parseUnaryOperator(SymbolDescriptor symbol);
-        SymbolDescriptor parseBinaryOperator(SymbolDescriptor left, SymbolDescriptor right);
+
+        SymbolDescriptor parseBinaryOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op);
+        SymbolDescriptor parseArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index);
+        SymbolDescriptor parseMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess);
 
         // void skipWhitespace()
         // {

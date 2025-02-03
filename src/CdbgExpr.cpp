@@ -4,10 +4,10 @@
 #include <bit>
 #include <cstdint>
 #include <iostream>
+#include <stack>
 
 namespace CdbgExpr
 {
-
     SymbolDescriptor Expression::eval(bool assignmentAllowed)
     {
         tokenize(expr_);
@@ -15,10 +15,17 @@ namespace CdbgExpr
         {
             std::cout << "Token: " << (int)token.type << ", Value: " << token.value << "\n";
         }
+        tokens = convertToPostfix(tokens); // Convert to postfix notation
+        std::cout << "After conversion to postfix: \n";
+
+        for (auto &token : tokens)
+        {
+            std::cout << "Token: " << (int)token.type << ", Value: " << token.value << "\n";
+        }
+
         pos_ = 0;
         assignmentAllowed_ = assignmentAllowed;
-        SymbolDescriptor result = parseExpression();
-        return result;
+        return parseExpression(); // Evaluate the expression
     }
 
     Expression::~Expression() {}
@@ -27,322 +34,360 @@ namespace CdbgExpr
     {
         std::string token;
         Token currentToken;
-        for (char c : expr)
+        size_t i = 0;
+        while (i < expr.size())
         {
-            if (c == ' ' || c == '\t' || c == '\n')
+            char c = expr[i];
+            if (std::isspace(c))
             {
-                if (!token.empty())
+                i++;
+                continue;
+            }
+            if (std::isdigit(c))
+            {
+                token.clear();
+                while (i < expr.size() && std::isdigit(expr[i]))
                 {
-                    currentToken.type = TokenType::SYMBOL;
-                    currentToken.value = token;
-                    tokens.push_back(currentToken);
-                    token.clear();
+                    token += expr[i];
+                    i++;
                 }
+                tokens.push_back({TokenType::NUMBER, token});
+                continue;
             }
-            else if (c == '(' || c == '[')
+            if (std::isalpha(c) || c == '_')
             {
-                if (!token.empty())
+                token.clear();
+                while (i < expr.size() && (std::isalnum(expr[i]) || expr[i] == '_'))
                 {
-                    currentToken.type = TokenType::SYMBOL;
-                    currentToken.value = token;
-                    tokens.push_back(currentToken);
-                    token.clear();
+                    token += expr[i];
+                    i++;
                 }
-                currentToken.type = TokenType::PARENTHESIS;
-                currentToken.value = std::string(1, c);
-                tokens.push_back(currentToken);
-                currentToken.children = {};
-                tokenizeNested(expr, currentToken);
+                tokens.push_back({TokenType::SYMBOL, token});
+                continue;
             }
-            else if (c == ')' || c == ']')
+            if (c == '(' || c == ')')
             {
-                if (!token.empty())
-                {
-                    currentToken.type = TokenType::SYMBOL;
-                    currentToken.value = token;
-                    tokens.back().children.push_back(currentToken);
-                    token.clear();
-                }
-                currentToken.type = TokenType::PARENTHESIS;
-                currentToken.value = std::string(1, c);
-                tokens.back().children.push_back(currentToken);
+                tokens.push_back({TokenType::PARENTHESIS, std::string(1, c)});
+                i++;
+                continue;
             }
-            else if (c == '.' || c == '->')
+            if (c == '[' || c == ']')
             {
-                if (!token.empty())
-                {
-                    currentToken.type = TokenType::SYMBOL;
-                    currentToken.value = token;
-                    tokens.push_back(currentToken);
-                    token.clear();
-                }
-                currentToken.type = TokenType::STRUCT_ACCESS;
-                currentToken.value = std::string(1, c);
-                tokens.push_back(currentToken);
+                tokens.push_back({TokenType::ARRAY_ACCESS, std::string(1, c)});
+                i++;
+                continue;
             }
-            else if (c == '=' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%' ||
-                     c == '!' || c == '&' || c == '|' || c == '^' || c == '~' || c == '<' ||
-                     c == '>' || c == '(' || c == ')' || c == '[' || c == ']' || c == '{' ||
-                     c == '}' || c == ',' || c == ';' || c == '?' || c == ':')
+            if (c == '.' || (c == '-' && i + 1 < expr.size() && expr[i + 1] == '>'))
             {
-                if (!token.empty())
-                {
-                    currentToken.type = TokenType::SYMBOL;
-                    currentToken.value = token;
-                    tokens.push_back(currentToken);
-                    token.clear();
-                }
-                currentToken.type = TokenType::OPERATOR;
-                currentToken.value = std::string(1, c);
-                tokens.push_back(currentToken);
+                if (c == '-')
+                    i++;
+                tokens.push_back({TokenType::STRUCT_ACCESS, std::string(1, c)});
+                i++;
+                continue;
             }
-            else
+            token.clear();
+            while (i < expr.size() && std::ispunct(expr[i]) && expr[i] != '(' && expr[i] != ')' && expr[i] != '[' && expr[i] != ']')
             {
-                token += c;
+                token += expr[i];
+                i++;
             }
-        }
-        if (!token.empty())
-        {
-            currentToken.type = TokenType::SYMBOL;
-            currentToken.value = token;
-            tokens.push_back(currentToken);
+            tokens.push_back({TokenType::OPERATOR, token});
         }
     }
-    
-    void Expression::tokenizeNested(const std::string& expr, Token& token) {
-        std::string nestedExpr;
-        int depth = 1;
-        for (char c : expr) {
-            if (c == '(' || c == '[') {
-                depth++;
-            } else if (c == ')' || c == ']') {
-                depth--;
-                if (depth == 0) {
-                    break;
+
+    std::vector<Expression::Token> Expression::convertToPostfix(const std::vector<Token> &tokens)
+    {
+        std::vector<Token> output;
+        std::stack<Token> operators;
+
+        for (const auto &token : tokens)
+        {
+            if (token.type == TokenType::SYMBOL || token.type == TokenType::NUMBER)
+            {
+                output.push_back(token);
+            }
+            else if (token.type == TokenType::PARENTHESIS)
+            {
+                if (token.value == "(")
+                {
+                    operators.push(token);
+                }
+                else if (token.value == ")")
+                {
+                    while (!operators.empty() && operators.top().value != "(")
+                    {
+                        output.push_back(operators.top());
+                        operators.pop();
+                    }
+                    if (!operators.empty())
+                        operators.pop();
                 }
             }
-            nestedExpr += c;
+            else if (token.type == TokenType::ARRAY_ACCESS)
+            {
+                if (token.value == "[")
+                {
+                    operators.push(token);
+                }
+                else if (token.value == "]")
+                {
+                    while (!operators.empty() && operators.top().value != "[")
+                    {
+                        output.push_back(operators.top());
+                        operators.pop();
+                    }
+                    if (!operators.empty())
+                        operators.pop();
+
+                    output.push_back({TokenType::OPERATOR, "[]"});
+                }
+            }
+            else if (token.type == TokenType::STRUCT_ACCESS)
+            {
+                while (!operators.empty() && getPrecedence(operators.top()) >= getPrecedence(token))
+                {
+                    output.push_back(operators.top());
+                    operators.pop();
+                }
+                operators.push(token);
+            }
+            else if (token.type == TokenType::OPERATOR)
+            {
+                while (!operators.empty() && getPrecedence(operators.top()) >= getPrecedence(token))
+                {
+                    output.push_back(operators.top());
+                    operators.pop();
+                }
+                operators.push(token);
+            }
         }
-        tokenize(nestedExpr, token.children);
+
+        while (!operators.empty())
+        {
+            output.push_back(operators.top());
+            operators.pop();
+        }
+
+        return output;
+    }
+
+    int Expression::getPrecedence(const Token &token)
+    {
+        if (token.type == TokenType::STRUCT_ACCESS)
+            return 17; // . and ->
+        if (token.value == "[]")
+            return 16; // []
+        if (token.value == "++" || token.value == "--")
+            return 15;
+        if (token.value == "*" || token.value == "/" || token.value == "%")
+            return 14;
+        if (token.value == "+" || token.value == "-")
+            return 13;
+        if (token.value == "<<" || token.value == ">>")
+            return 12;
+        if (token.value == "<" || token.value == "<=" || token.value == ">" || token.value == ">=")
+            return 11;
+        if (token.value == "==" || token.value == "!=")
+            return 10;
+        if (token.value == "&")
+            return 9;
+        if (token.value == "^")
+            return 8;
+        if (token.value == "|")
+            return 7;
+        if (token.value == "&&")
+            return 6;
+        if (token.value == "||")
+            return 5;
+        if (token.value == "?" || token.value == ":")
+            return 4;
+        if (token.value == "=" || token.value == "+=" || token.value == "-=" || token.value == "*=" || token.value == "/=" || token.value == "%=" ||
+            token.value == "&=" || token.value == "^=" || token.value == "|=" || token.value == "<<=" || token.value == ">>=")
+            return 3;
+        if (token.value == ",")
+            return 2;
+        return 0;
     }
 
     SymbolDescriptor Expression::parseExpression()
     {
-        if (tokens.empty())
+        std::stack<SymbolDescriptor> evalStack;
+
+        for (const auto &token : tokens)
         {
-            throw std::runtime_error("Unexpected end of expression");
-        }
-        Token token = tokens.front();
-        tokens.erase(tokens.begin());
-        if (token.type == TokenType::PARENTHESIS)
-        {
-            if (token.value == "(")
+            if (token.type == TokenType::SYMBOL)
             {
-                SymbolDescriptor expr = parseExpression(token.children);
-                if (token.children.empty() || token.children.front().type != TokenType::PARENTHESIS ||
-                    token.children.front().value != ")")
+                evalStack.push(dbgData->getSymbol(token.value));
+            }
+            else if (token.type == TokenType::NUMBER)
+            {
+                evalStack.push(SymbolDescriptor::strToNumber(token.value)); // Convert to number
+            }
+            else if (token.type == TokenType::OPERATOR || token.type == TokenType::STRUCT_ACCESS)
+            {
+                if (evalStack.size() < 2)
                 {
-                    throw std::runtime_error("Unbalanced parentheses");
+                    throw std::runtime_error("Insufficient operands for binary operator: " + token.value);
                 }
-                token.children.erase(token.children.begin());
-                return expr;
-            }
-            else
-            {
-                throw std::runtime_error("Unexpected closing parenthesis");
+                SymbolDescriptor right = evalStack.top();
+                evalStack.pop();
+                SymbolDescriptor left = evalStack.top();
+                evalStack.pop();
+                evalStack.push(parseBinaryOperator(left, right, token.value));
             }
         }
-        else if (token.type == TokenType::SYMBOL)
+
+        if (evalStack.size() != 1)
         {
-            SymbolDescriptor symbol = dbgData->getSymbol(token.value);
-            if (!tokens.empty() && tokens.front().type == TokenType::ARRAY_ACCESS)
-            {
-                return parseArrayAccess(symbol, tokens.front().children);
-            }
-            else if (!tokens.empty() && tokens.front().type == TokenType::STRUCT_ACCESS)
-            {
-                return parseStructAccess(symbol, tokens.front().children);
-            }
-            else
-            {
-                return symbol;
-            }
+            throw std::runtime_error("Invalid expression evaluation");
         }
-        else if (token.type == TokenType::NUMBER)
+
+        return evalStack.top();
+    }
+    SymbolDescriptor Expression::parseBinaryOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op)
+    {
+        if (op == "+")
         {
-            // Handle number literals
-            // ...
+            return left + right;
         }
-        else
+        else if (op == "-")
         {
-            throw std::runtime_error("Unexpected token");
+            return left - right;
         }
+        else if (op == "*")
+        {
+            return left * right;
+        }
+        else if (op == "/")
+        {
+            return left / right;
+        }
+        else if (op == "%")
+        {
+            return left % right;
+        }
+        else if (op == "&")
+        {
+            return left & right;
+        }
+        else if (op == "|")
+        {
+            return left | right;
+        }
+        else if (op == "^")
+        {
+            return left ^ right;
+        }
+        else if (op == "<<")
+        {
+            return left << right;
+        }
+        else if (op == ">>")
+        {
+            return left >> right;
+        }
+        else if (op == "&&")
+        {
+            return left && right;
+        }
+        else if (op == "||")
+        {
+            return left || right;
+        }
+        else if (op == "==")
+        {
+            return left == right;
+        }
+        else if (op == "!=")
+        {
+            return left != right;
+        }
+        else if (op == "<")
+        {
+            return left < right;
+        }
+        else if (op == "<=")
+        {
+            return left <= right;
+        }
+        else if (op == ">")
+        {
+            return left > right;
+        }
+        else if (op == ">=")
+        {
+            return left >= right;
+        }
+        else if (op == "[]")
+        {
+            return parseArrayAccess(left, right);
+        }
+        else if (op == "." || op == "->")
+        {
+            return parseMemberAccess(left, right.name, op == "->");
+        }
+        throw std::runtime_error("Unsupported binary operator: " + op);
     }
 
-    SymbolDescriptor Expression::parseExpression(std::vector<Token> &tokens)
+    SymbolDescriptor Expression::parseArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index)
     {
-        SymbolDescriptor left = parseTerm(tokens);
-        while (true)
+        if (array.cType[0] != CType::POINTER && array.cType[0] != CType::ARRAY)
         {
-            if (tokens.empty())
-            {
-                break;
-            }
-            Token token = tokens.front();
-            tokens.erase(tokens.begin());
-            if (token.type == TokenType::OPERATOR)
-            {
-                SymbolDescriptor right = parseTerm(tokens);
-                left = parseBinaryOperator(left, right);
-            }
-            else
-            {
-                break;
-            }
+            throw std::runtime_error("Cannot index a non-array type");
         }
-        return left;
+        int idx = index.getValue();
+        return array.dereference(idx);
     }
 
-    SymbolDescriptor Expression::parseTerm(std::vector<Token> &tokens)
+    SymbolDescriptor Expression::parseMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess)
     {
-        SymbolDescriptor left = parseFactor(tokens);
-        while (true)
+        if (isPointerAccess && structOrPointer.cType[0] != CType::POINTER)
         {
-            if (tokens.empty())
-            {
-                break;
-            }
-            Token token = tokens.front();
-            tokens.erase(tokens.begin());
-            if (token.type == TokenType::OPERATOR)
-            {
-                SymbolDescriptor right = parseFactor(tokens);
-                left = parseBinaryOperator(left, right);
-            }
-            else
-            {
-                break;
-            }
+            throw std::runtime_error("Expected a pointer for '->' operator");
         }
-        return left;
-    }
-
-    SymbolDescriptor Expression::parseFactor(std::vector<Token> &tokens)
-    {
-        if (tokens.empty())
-        {
-            throw std::runtime_error("Unexpected end of expression");
-        }
-        Token token = tokens.front();
-        tokens.erase(tokens.begin());
-        if (token.type == TokenType::SYMBOL)
-        {
-            SymbolDescriptor symbol = dbgData->getSymbol(token.value);
-            if (!tokens.empty() && tokens.front().type == TokenType::ARRAY_ACCESS)
-            {
-                return parseArrayAccess(symbol, tokens);
-            }
-            else if (!tokens.empty() && tokens.front().type == TokenType::STRUCT_ACCESS)
-            {
-                return parseStructAccess(symbol, tokens);
-            }
-            else
-            {
-                return symbol;
-            }
-        }
-        else if (token.type == TokenType::NUMBER)
-        {
-            // Handle number literals
-            // ...
-        }
-        else if (token.type == TokenType::PARENTHESIS)
-        {
-            if (token.value == "(")
-            {
-                SymbolDescriptor expr = parseExpression(token.children);
-                if (token.children.empty() || token.children.front().type != TokenType::PARENTHESIS ||
-                    token.children.front().value != ")")
-                {
-                    throw std::runtime_error("Unbalanced parentheses");
-                }
-                token.children.erase(token.children.begin());
-                return expr;
-            }
-            else
-            {
-                throw std::runtime_error("Unexpected closing parenthesis");
-            }
-        }
-        else
-        {
-            throw std::runtime_error("Unexpected token");
-        }
-    }
-
-    SymbolDescriptor Expression::parseArrayAccess(SymbolDescriptor symbol, std::vector<Token> &tokens)
-    {
-        if (tokens.empty() || tokens.front().type != TokenType::ARRAY_ACCESS ||
-            tokens.front().value != "[")
-        {
-            throw std::runtime_error("Expected array access operator");
-        }
-        tokens.erase(tokens.begin());
-        SymbolDescriptor index = parseExpression(tokens);
-        if (tokens.empty() || tokens.front().type != TokenType::ARRAY_ACCESS ||
-            tokens.front().value != "]")
-        {
-            throw std::runtime_error("Expected closing array access operator");
-        }
-        tokens.erase(tokens.begin());
-        // Handle array access
-        // ...
-        return symbol;
-    }
-
-    SymbolDescriptor Expression::parseStructAccess(SymbolDescriptor symbol, std::vector<Token> &tokens)
-    {
-        if (tokens.empty() || tokens.front().type != TokenType::STRUCT_ACCESS)
-        {
-            throw std::runtime_error("Expected struct access operator");
-        }
-        Token token = tokens.front();
-        tokens.erase(tokens.begin());
-        SymbolDescriptor member = dbgData->getSymbol(token.value);
-        // Handle struct access
-        // ...
-        return symbol;
-    }
-
-    SymbolDescriptor Expression::parseUnaryOperator(SymbolDescriptor symbol)
-    {
-        if (tokens.empty() || tokens.front().type != TokenType::OPERATOR)
-        {
-            throw std::runtime_error("Expected unary operator");
-        }
-        Token token = tokens.front();
-        tokens.erase(tokens.begin());
-        // Handle unary operator
-        // ...
-        return symbol;
-    }
-
-    SymbolDescriptor Expression::parseBinaryOperator(SymbolDescriptor left, SymbolDescriptor right)
-    {
-        if (tokens.empty() || tokens.front().type != TokenType::OPERATOR)
-        {
-            throw std::runtime_error("Expected binary operator");
-        }
-        Token token = tokens.front();
-        tokens.erase(tokens.begin());
-        // Handle binary operator
-        // ...
-        return left;
+        const SymbolDescriptor &baseStruct = isPointerAccess ? structOrPointer.dereference() : structOrPointer;
+        return baseStruct.getMember(member);
     }
 
     // Symbol handling functions.
 
-    void SymbolDescriptor::setValue(uint64_t val, DbgData *data)
+    DbgData *SymbolDescriptor::data = nullptr;
+
+    SymbolDescriptor SymbolDescriptor::strToNumber(const std::string &str)
+    {
+        SymbolDescriptor number;
+        number.cType.push_back(CType::INT);
+        number.value = std::stol(str);
+        number.hasAddress = false;
+        return SymbolDescriptor();
+    }
+
+    SymbolDescriptor SymbolDescriptor::dereference(int offset) const
+    {
+        if (cType.size() < 2 || (cType[0] != CType::POINTER && cType[0] != CType::ARRAY))
+        {
+            throw std::runtime_error("Cannot dereference a non-pointer type");
+        }
+        SymbolDescriptor result;
+        result.cType = cType;
+        result.cType.erase(result.cType.begin());
+        result.value = getValue() + (offset * data->CTypeSize(result.cType[0]));
+        result.hasAddress = true;
+        return result;
+    }
+
+    SymbolDescriptor SymbolDescriptor::getMember(const std::string &name) const
+    {
+        auto it = std::find_if(members.begin(), members.end(), [name](const Member &member)
+                               { return member.symbol->name == name; });
+        if (it == members.end())
+        {
+            throw std::runtime_error("Member not found");
+        }
+        return *it->symbol;
+    }
+
+    void SymbolDescriptor::setValue(uint64_t val)
     {
         if (hasAddress)
         {
@@ -357,7 +402,7 @@ namespace CdbgExpr
         }
     }
 
-    uint64_t SymbolDescriptor::getValue(DbgData *data)
+    uint64_t SymbolDescriptor::getValue() const
     {
         uint64_t val = 0;
         if (hasAddress)
@@ -374,7 +419,7 @@ namespace CdbgExpr
         return val;
     }
 
-    std::string SymbolDescriptor::toString(std::function<uint8_t(uint64_t)> memoryReader) const
+    std::string SymbolDescriptor::toString() const
     {
         if (cType.empty())
             return "<unknown type>";
@@ -427,12 +472,12 @@ namespace CdbgExpr
         {
             if (cType[1] == CType::CHAR)
             {
-                if (!value)
+                if (!getValue())
                     return "0x0";
                 result << "\"";
-                uint64_t addr = reinterpret_cast<uint64_t>(value);
+                uint64_t addr = reinterpret_cast<uint64_t>(getValue());
                 char ch;
-                while ((ch = static_cast<char>(memoryReader(addr++))) != '\0')
+                while ((ch = static_cast<char>(data->getByte(addr++))) != '\0')
                 {
                     result << ch;
                 }
@@ -441,7 +486,7 @@ namespace CdbgExpr
             }
             else
             {
-                result << "0x" << std::hex << reinterpret_cast<uint64_t>(value);
+                result << "0x" << std::hex << reinterpret_cast<uint64_t>(getValue());
                 return result.str();
             }
         }
@@ -450,23 +495,23 @@ namespace CdbgExpr
 
         if (baseType == CType::INT)
         {
-            return result.str() + std::to_string(value);
+            return result.str() + std::to_string(getValue());
         }
         else if (baseType == CType::FLOAT)
         {
-            return result.str() + std::to_string((float)value);
+            return result.str() + std::to_string((float)getValue());
         }
         else if (baseType == CType::DOUBLE)
         {
-            return result.str() + std::to_string((double)(value));
+            return result.str() + std::to_string((double)(getValue()));
         }
         else if (baseType == CType::BOOL)
         {
-            return result.str() + ((bool)value ? "true" : "false");
+            return result.str() + ((bool)getValue() ? "true" : "false");
         }
         else if (baseType == CType::CHAR)
         {
-            return result.str() + (char)value;
+            return result.str() + (char)getValue();
         }
         else if (baseType == CType::STRUCT)
         {
@@ -477,7 +522,7 @@ namespace CdbgExpr
                 {
                     result << ", ";
                 }
-                result << members[i].symbol->name << " = " << members[i].symbol->toString(memoryReader);
+                result << members[i].symbol->name << " = " << members[i].symbol->toString();
             }
             result << " }";
             return result.str();
@@ -495,13 +540,13 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.value) + std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) + std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.value) + std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) + std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value += right.value;
+            result.value += right.getValue();
             break;
         }
         return result;
@@ -513,13 +558,13 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.value) - std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) - std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.value) - std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) - std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value -= right.value;
+            result.value -= right.getValue();
             break;
         }
         return result;
@@ -531,13 +576,13 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.value) * std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) * std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.value) * std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) * std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value *= right.value;
+            result.value *= right.getValue();
             break;
         }
         return result;
@@ -549,13 +594,13 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.value) / std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) / std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.value) / std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) / std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value /= right.value;
+            result.value /= right.getValue();
             break;
         }
         return result;
@@ -564,7 +609,7 @@ namespace CdbgExpr
     SymbolDescriptor SymbolDescriptor::operator%(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value %= right.value;
+        result.value %= right.getValue();
         return result;
     }
 
@@ -574,15 +619,17 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) == std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) == std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) == std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) == std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value == right.value);
+            result.value = (bool)(result.getValue() == right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
@@ -592,15 +639,17 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) != std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) != std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) != std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) != std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value != right.value);
+            result.value = (bool)(result.getValue() != right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
@@ -610,15 +659,17 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) < std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) < std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) < std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) < std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value < right.value);
+            result.value = (bool)(result.getValue() < right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
@@ -628,15 +679,17 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) > std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) > std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) > std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) > std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value > right.value);
+            result.value = (bool)(result.getValue() > right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
@@ -646,15 +699,17 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) <= std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) <= std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) <= std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) <= std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value <= right.value);
+            result.value = (bool)(result.getValue() <= right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
@@ -664,79 +719,86 @@ namespace CdbgExpr
         switch (result.cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.value) >= std::bit_cast<float>((uint32_t)right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) >= std::bit_cast<float>((uint32_t)right.getValue()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.value) >= std::bit_cast<double>(right.value));
+            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) >= std::bit_cast<double>(right.getValue()));
             break;
         default:
-            result.value = (bool)(result.value >= right.value);
+            result.value = (bool)(result.getValue() >= right.getValue());
             break;
         }
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator&&(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value = (bool)result.value && (bool)right.value;
+        result.value = (bool)result.getValue() && (bool)right.getValue();
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator||(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value = (bool)result.value || (bool)right.value;
+        result.value = (bool)result.getValue() || (bool)right.getValue();
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator!() const
     {
         SymbolDescriptor result = *this;
-        result.value = !((bool)result.value);
+        result.value = !((bool)result.getValue());
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator&(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value &= right.value;
+        result.value &= right.getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator|(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value &= right.value;
+        result.value &= right.getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator^(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value &= right.value;
+        result.value &= right.getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator~() const
     {
         SymbolDescriptor result = *this;
-        result.value = ~result.value;
+        result.value = ~result.getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator<<(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value <<= right.value;
+        result.value <<= right.getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator>>(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result = *this;
-        result.value >>= right.value;
+        result.value >>= right.getValue();
         return result;
     }
-
 } // namespace CdbgExpr

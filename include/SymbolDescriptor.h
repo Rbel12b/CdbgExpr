@@ -51,51 +51,57 @@ namespace CdbgExpr
 
     struct Member
     {
-        SymbolDescriptor* symbol; // The symbol information for this member.
-        int offset = 0;                   // Member-specific offset.
+        SymbolDescriptor *symbol; // The symbol information for this member.
+        int offset = 0;           // Member-specific offset.
     };
 
     class SymbolDescriptor
     {
     public:
+        static DbgData* data;
         // Common fields.
         std::string name;   // Name of the symbol or type.
         Scope scope;        // The scope (global, file, function, or struct).
         uint64_t level = 0; // Additional context (for nested scopes).
         uint64_t block = 0;
         uint64_t value;
-        bool hasAddress;
+        bool hasAddress = false;
         uint64_t size = 0;
 
         // C type information.
         std::vector<CType> cType;
         std::vector<Member> members;
 
-        void setValue(uint64_t val, DbgData* data);
-        uint64_t getValue(DbgData* data);
+        static SymbolDescriptor strToNumber(const std::string &str);
 
-        std::string toString(std::function<uint8_t(uint64_t)> memoryReader) const;
+        SymbolDescriptor dereference(int offset = 0) const;
+        SymbolDescriptor getMember(const std::string &name) const;
 
-        SymbolDescriptor operator+(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator-(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator*(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator/(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator%(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator==(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator!=(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator<(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator>(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator<=(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator>=(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator&&(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator||(const SymbolDescriptor& right) const;
+        void setValue(uint64_t val);
+        uint64_t getValue() const;
+
+        std::string toString() const;
+
+        SymbolDescriptor operator+(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator-(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator*(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator/(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator%(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator==(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator!=(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator<(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator>(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator<=(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator>=(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator&&(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator||(const SymbolDescriptor &right) const;
         SymbolDescriptor operator!() const;
-        SymbolDescriptor operator&(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator|(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator^(const SymbolDescriptor& right) const;
+        SymbolDescriptor operator&(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator|(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator^(const SymbolDescriptor &right) const;
         SymbolDescriptor operator~() const;
-        SymbolDescriptor operator<<(const SymbolDescriptor& right) const;
-        SymbolDescriptor operator>>(const SymbolDescriptor& right) const;
+        SymbolDescriptor operator<<(const SymbolDescriptor &right) const;
+        SymbolDescriptor operator>>(const SymbolDescriptor &right) const;
     };
 
 } // namespace CdbgExpr
