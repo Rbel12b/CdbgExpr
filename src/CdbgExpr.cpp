@@ -5,27 +5,25 @@
 #include <cstdint>
 #include <iostream>
 #include <stack>
+#include <vector>
+#include <unordered_map>
 
 namespace CdbgExpr
 {
+    Expression::Expression(const std::string &expr, DbgData *dbgData)
+        : expr_(expr), pos_(0), dbgData(dbgData)
+    {
+        SymbolDescriptor::data = dbgData;
+        ASTNode::data = dbgData;
+    }
+
     SymbolDescriptor Expression::eval(bool assignmentAllowed)
     {
         tokenize(expr_);
-        for (auto &token : tokens)
-        {
-            std::cout << "Token: " << (int)token.type << ", Value: " << token.value << "\n";
-        }
-        tokens = convertToPostfix(tokens); // Convert to postfix notation
-        std::cout << "After conversion to postfix: \n";
-
-        for (auto &token : tokens)
-        {
-            std::cout << "Token: " << (int)token.type << ", Value: " << token.value << "\n";
-        }
-
         pos_ = 0;
-        assignmentAllowed_ = assignmentAllowed;
-        return parseExpression(); // Evaluate the expression
+        SymbolDescriptor::assignmentAllowed = assignmentAllowed;
+        ExpressionParser expParser(tokens, dbgData);
+        return expParser.parse()->evaluate(); // Evaluate the expression
     }
 
     Expression::~Expression() {}
@@ -34,7 +32,7 @@ namespace CdbgExpr
     {
         std::string token;
         Token currentToken;
-        size_t i = 0;
+        uint64_t i = 0;
         while (i < expr.size())
         {
             char c = expr[i];
@@ -85,6 +83,19 @@ namespace CdbgExpr
                 i++;
                 continue;
             }
+            if (c == '+' || c == '-' || c == '*' || c == '&' || c == '=')
+            {
+                if (tokens.empty() || (tokens.back().type != TokenType::SYMBOL && tokens.back().type != TokenType::NUMBER))
+                {
+                    tokens.push_back({TokenType::UNARY_OPERATOR, std::string(1, c)});
+                }
+                else
+                {
+                    tokens.push_back({TokenType::OPERATOR, std::string(1, c)});
+                }
+                i++;
+                continue;
+            }
             token.clear();
             while (i < expr.size() && std::ispunct(expr[i]) && expr[i] != '(' && expr[i] != ')' && expr[i] != '[' && expr[i] != ']')
             {
@@ -95,156 +106,106 @@ namespace CdbgExpr
         }
     }
 
-    std::vector<Expression::Token> Expression::convertToPostfix(const std::vector<Token> &tokens)
+    int getPrecedence(const Token &token)
     {
-        std::vector<Token> output;
-        std::stack<Token> operators;
+        const std::unordered_map<std::string, int> precedence = {
+            {"[]", 17}, {"++", 15}, {"--", 15}, {"*", 14}, {"/", 14}, {"%", 14},
+            {"+", 13}, {"-", 13}, {"<<", 12}, {">>", 12}, {"<", 11}, {">", 11}, {"<=", 11}, {">=", 11},
+            {"==", 10}, {"!=", 10}, {"&", 9}, {"^", 8}, {"|", 7}, {"&&", 6}, {"||", 5}, {"?", 4}, {":", 4},
+            {"=", 3}, {"+=", 3}, {"-=", 3}, {"*=", 3}, {"/=", 3}, {"%=", 3}, {"<<=", 3}, {">>=", 3},
+            {"&=", 3}, {"^=", 3}, {"|=", 3}, {",", 2},
+        };
 
-        for (const auto &token : tokens)
+        if (token.type == TokenType::PARENTHESIS)
         {
-            if (token.type == TokenType::SYMBOL || token.type == TokenType::NUMBER)
-            {
-                output.push_back(token);
-            }
-            else if (token.type == TokenType::PARENTHESIS)
-            {
-                if (token.value == "(")
-                {
-                    operators.push(token);
-                }
-                else if (token.value == ")")
-                {
-                    while (!operators.empty() && operators.top().value != "(")
-                    {
-                        output.push_back(operators.top());
-                        operators.pop();
-                    }
-                    if (!operators.empty())
-                        operators.pop();
-                }
-            }
-            else if (token.type == TokenType::ARRAY_ACCESS)
-            {
-                if (token.value == "[")
-                {
-                    operators.push(token);
-                }
-                else if (token.value == "]")
-                {
-                    while (!operators.empty() && operators.top().value != "[")
-                    {
-                        output.push_back(operators.top());
-                        operators.pop();
-                    }
-                    if (!operators.empty())
-                        operators.pop();
-
-                    output.push_back({TokenType::OPERATOR, "[]"});
-                }
-            }
-            else if (token.type == TokenType::STRUCT_ACCESS)
-            {
-                while (!operators.empty() && getPrecedence(operators.top()) >= getPrecedence(token))
-                {
-                    output.push_back(operators.top());
-                    operators.pop();
-                }
-                operators.push(token);
-            }
-            else if (token.type == TokenType::OPERATOR)
-            {
-                while (!operators.empty() && getPrecedence(operators.top()) >= getPrecedence(token))
-                {
-                    output.push_back(operators.top());
-                    operators.pop();
-                }
-                operators.push(token);
-            }
+            return 0;
         }
-
-        while (!operators.empty())
+        else if (token.type == TokenType::STRUCT_ACCESS)
+        {    
+            return 18;
+        }
+        else if (token.type == TokenType::UNARY_OPERATOR)
+        {    
+            return 16;
+        }
+        else if (precedence.contains(token.value))
         {
-            output.push_back(operators.top());
-            operators.pop();
+            return precedence.at(token.value);
         }
-
-        return output;
-    }
-
-    int Expression::getPrecedence(const Token &token)
-    {
-        if (token.type == TokenType::STRUCT_ACCESS)
-            return 17; // . and ->
-        if (token.value == "[]")
-            return 16; // []
-        if (token.value == "++" || token.value == "--")
-            return 15;
-        if (token.value == "*" || token.value == "/" || token.value == "%")
-            return 14;
-        if (token.value == "+" || token.value == "-")
-            return 13;
-        if (token.value == "<<" || token.value == ">>")
-            return 12;
-        if (token.value == "<" || token.value == "<=" || token.value == ">" || token.value == ">=")
-            return 11;
-        if (token.value == "==" || token.value == "!=")
-            return 10;
-        if (token.value == "&")
-            return 9;
-        if (token.value == "^")
-            return 8;
-        if (token.value == "|")
-            return 7;
-        if (token.value == "&&")
-            return 6;
-        if (token.value == "||")
-            return 5;
-        if (token.value == "?" || token.value == ":")
-            return 4;
-        if (token.value == "=" || token.value == "+=" || token.value == "-=" || token.value == "*=" || token.value == "/=" || token.value == "%=" ||
-            token.value == "&=" || token.value == "^=" || token.value == "|=" || token.value == "<<=" || token.value == ">>=")
-            return 3;
-        if (token.value == ",")
-            return 2;
         return 0;
     }
 
-    SymbolDescriptor Expression::parseExpression()
+    SymbolDescriptor evalUnaryOperator(const SymbolDescriptor &operand, const std::string &op)
     {
-        std::stack<SymbolDescriptor> evalStack;
-
-        for (const auto &token : tokens)
+        if (op == "-")
         {
-            if (token.type == TokenType::SYMBOL)
-            {
-                evalStack.push(dbgData->getSymbol(token.value));
-            }
-            else if (token.type == TokenType::NUMBER)
-            {
-                evalStack.push(SymbolDescriptor::strToNumber(token.value)); // Convert to number
-            }
-            else if (token.type == TokenType::OPERATOR || token.type == TokenType::STRUCT_ACCESS)
-            {
-                if (evalStack.size() < 2)
-                {
-                    throw std::runtime_error("Insufficient operands for binary operator: " + token.value);
-                }
-                SymbolDescriptor right = evalStack.top();
-                evalStack.pop();
-                SymbolDescriptor left = evalStack.top();
-                evalStack.pop();
-                evalStack.push(parseBinaryOperator(left, right, token.value));
-            }
+            return -operand;
         }
-
-        if (evalStack.size() != 1)
+        else if (op == "+")
         {
-            throw std::runtime_error("Invalid expression evaluation");
+            return operand;
         }
-
-        return evalStack.top();
+        else if (op == "*")
+        {
+            return operand.dereference();
+        }
+        else if (op == "&")
+        {
+            return operand.addressOf();
+        }
+        throw std::runtime_error("Unsupported unary operator: " + op);
     }
-    SymbolDescriptor Expression::parseBinaryOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op)
+
+    SymbolDescriptor evalBinaryOperator(SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op)
+    {
+        if (op == "=")
+        {
+            return left.assign(right);
+        }
+        else if (op == "+=")
+        {
+            return left.assign(left + right);
+        }
+        else if (op == "-=")
+        {
+            return left.assign(left - right);
+        }
+        else if (op == "*=")
+        {
+            return left.assign(left * right);
+        }
+        else if (op == "/=")
+        {
+            return left.assign(left / right);
+        }
+        else if (op == "%=")
+        {
+            return left.assign(left % right);
+        }
+        else if (op == "&=")
+        {
+            return left.assign(left & right);
+        }
+        else if (op == "|=")
+        {
+            return left.assign(left | right);
+        }
+        else if (op == "^=")
+        {
+            return left.assign(left ^ right);
+        }
+        else if (op == "<<=")
+        {
+            return left.assign(left << right);
+        }
+        else if (op == ">>=")
+        {
+            return left.assign(left >> right);
+        }
+        return evalArithmeticOperator(left, right, op);
+    }
+
+    SymbolDescriptor evalArithmeticOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op)
     {
         if (op == "+")
         {
@@ -320,16 +281,16 @@ namespace CdbgExpr
         }
         else if (op == "[]")
         {
-            return parseArrayAccess(left, right);
+            return evalArrayAccess(left, right);
         }
         else if (op == "." || op == "->")
         {
-            return parseMemberAccess(left, right.name, op == "->");
+            return evalMemberAccess(left, right.name, op == "->");
         }
         throw std::runtime_error("Unsupported binary operator: " + op);
     }
 
-    SymbolDescriptor Expression::parseArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index)
+    SymbolDescriptor evalArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index)
     {
         if (array.cType[0] != CType::POINTER && array.cType[0] != CType::ARRAY)
         {
@@ -339,7 +300,7 @@ namespace CdbgExpr
         return array.dereference(idx);
     }
 
-    SymbolDescriptor Expression::parseMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess)
+    SymbolDescriptor evalMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess)
     {
         if (isPointerAccess && structOrPointer.cType[0] != CType::POINTER)
         {
@@ -349,9 +310,117 @@ namespace CdbgExpr
         return baseStruct.getMember(member);
     }
 
+    BinaryOpNode::BinaryOpNode(std::string op, std::unique_ptr<ASTNode> lhs, std::unique_ptr<ASTNode> rhs)
+        : op(std::move(op)), left(std::move(lhs)), right(std::move(rhs)) {}
+
+    SymbolDescriptor BinaryOpNode::evaluate()
+    {
+        SymbolDescriptor lhsVal = left->evaluate();
+        SymbolDescriptor rhsVal = right->evaluate();
+
+        return evalBinaryOperator(lhsVal, rhsVal, op);
+    }
+
+    UnaryOpNode::UnaryOpNode(std::string op, std::unique_ptr<ASTNode> operand)
+        : op(std::move(op)), operand(std::move(operand)) {}
+
+    SymbolDescriptor UnaryOpNode::evaluate()
+    {
+        SymbolDescriptor value = operand->evaluate();
+
+        return evalUnaryOperator(value, op);
+    }
+
+    LiteralNode::LiteralNode(SymbolDescriptor val) : value(std::move(val)) {}
+
+    SymbolDescriptor LiteralNode::evaluate()
+    {
+        return value;
+    }
+
+    SymbolNode::SymbolNode(std::string name)
+        : name(std::move(name)) {}
+
+    SymbolDescriptor SymbolNode::evaluate()
+    {
+        return data->getSymbol(name);
+    }
+
+    std::unique_ptr<ASTNode> ExpressionParser::parsePrimary()
+    {
+        if (index >= tokens.size())
+            throw std::runtime_error("Unexpected end of input, index: " + std::to_string(index));
+
+        Token token = tokens[index++];
+        if (token.type == TokenType::NUMBER)
+        {
+            return std::make_unique<LiteralNode>(SymbolDescriptor::strToNumber(token.value));
+        }
+        else if (token.type == TokenType::SYMBOL)
+        {
+            return std::make_unique<SymbolNode>(token.value);
+        }
+        else if (token.type == TokenType::PARENTHESIS && token.value == "(")
+        {
+            auto expr = parseExpression(1);
+            if (tokens[index].type != TokenType::PARENTHESIS && tokens[index].value != ")")
+            {
+                throw std::runtime_error("Expected closing parenthesis: " + tokens[index].value + ", index: " + std::to_string(index));
+            }
+            ++index;
+            return expr;
+        }
+        throw std::runtime_error("Unexpected token in primary expression: " + tokens[index].value + ", index: " + std::to_string(index));
+    }
+
+    std::unique_ptr<ASTNode> ExpressionParser::parseExpression(int minPrecedence)
+    {
+        if (minPrecedence == 0)
+        {
+            minPrecedence = 1;
+        }
+        std::unique_ptr<ASTNode> lhs;
+
+        if (index >= tokens.size())
+            throw std::runtime_error("Unexpected end of input");
+
+        Token token = tokens[index];
+        if (token.type == TokenType::UNARY_OPERATOR)
+        {
+            index++; // Consume the operator
+            auto operand = parseExpression(getPrecedence(token) + 1);
+            lhs = std::make_unique<UnaryOpNode>(token.value, std::move(operand));
+        }
+        else
+        {
+            lhs = parsePrimary();
+        }
+
+        // Handle binary operators
+        while (index < tokens.size() && getPrecedence(tokens[index]) >= minPrecedence)
+        {
+            Token opToken = tokens[index++];
+            int precedence = getPrecedence(opToken);
+            auto rhs = parseExpression(precedence + 1);
+            lhs = std::make_unique<BinaryOpNode>(opToken.value, std::move(lhs), std::move(rhs));
+        }
+
+        return lhs;
+    }
+
+    ExpressionParser::ExpressionParser(std::vector<Token> tokens, DbgData *debuggerData)
+        : tokens(std::move(tokens)), index(0), debuggerData(debuggerData) {}
+
+    std::unique_ptr<ASTNode> ExpressionParser::parse()
+    {
+        return parseExpression(1);
+    }
+
     // Symbol handling functions.
 
+    DbgData *ASTNode::data = nullptr;
     DbgData *SymbolDescriptor::data = nullptr;
+    bool SymbolDescriptor::assignmentAllowed = false;
 
     SymbolDescriptor SymbolDescriptor::strToNumber(const std::string &str)
     {
@@ -359,7 +428,7 @@ namespace CdbgExpr
         number.cType.push_back(CType::INT);
         number.value = std::stol(str);
         number.hasAddress = false;
-        return SymbolDescriptor();
+        return number;
     }
 
     SymbolDescriptor SymbolDescriptor::dereference(int offset) const
@@ -385,6 +454,25 @@ namespace CdbgExpr
             throw std::runtime_error("Member not found");
         }
         return *it->symbol;
+    }
+
+    SymbolDescriptor SymbolDescriptor::addressOf() const
+    {
+        size_t addr;
+        if (!hasAddress)
+        {
+            addr = data->invalidAddress;
+        }
+        else
+        {
+            addr = value;
+        }
+        SymbolDescriptor result;
+        result.cType = cType;
+        result.cType.insert(result.cType.begin(), CType::POINTER);
+        result.value = addr;
+        result.hasAddress = false;
+        return result;
     }
 
     void SymbolDescriptor::setValue(uint64_t val)
@@ -473,8 +561,14 @@ namespace CdbgExpr
             if (cType[1] == CType::CHAR)
             {
                 if (!getValue())
+                {
                     return "0x0";
-                result << "\"";
+                }
+                else
+                {
+                    result << "0x" << std::hex << reinterpret_cast<uint64_t>(getValue());
+                }
+                result << " \"";
                 uint64_t addr = reinterpret_cast<uint64_t>(getValue());
                 char ch;
                 while ((ch = static_cast<char>(data->getByte(addr++))) != '\0')
@@ -534,271 +628,310 @@ namespace CdbgExpr
         return result.str() + "<unsupported type>";
     }
 
-    SymbolDescriptor SymbolDescriptor::operator+(const SymbolDescriptor &right) const
+    SymbolDescriptor SymbolDescriptor::assign(const SymbolDescriptor &right)
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
+        if (!assignmentAllowed)
+        {
+            throw std::runtime_error("Assignment not allowed"); 
+        }
+        setValue(right.getValue());
+        return *this;
+    }
+
+    float SymbolDescriptor::toFloat() const
+    {
+        float result = 0.0f;
+
+        try
+        {
+            if (cType[0] == CType::FLOAT)
+            {
+                result = std::bit_cast<float>((uint32_t)getValue());
+            }
+            else if (cType[0] == CType::DOUBLE)
+            {
+                result = std::bit_cast<double>(getValue());
+            }
+            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))))
+            {
+                result = -1.0f * (float)getValue();
+            }
+            else
+            {
+                result = (float)getValue();
+            }
+        }
+        catch (const std::out_of_range &e)
+        {
+            result = 0.0f;
+        }
+        return result;
+    }
+
+    double SymbolDescriptor::toDouble() const
+    {
+        double result = 0.0f;
+
+        try
+        {
+            if (cType[0] == CType::FLOAT)
+            {
+                result = std::bit_cast<float>((uint32_t)getValue());
+            }
+            else if (cType[0] == CType::DOUBLE)
+            {
+                result = std::bit_cast<double>(getValue());
+            }
+            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))))
+            {
+                result = -1.0f * (double)getValue();
+            }
+            else
+            {
+                result = (double)getValue();
+            }
+        }
+        catch (const std::out_of_range &e)
+        {
+            result = 0.0f;
+        }
+        return result;
+    }
+
+    int64_t SymbolDescriptor::toSigned() const
+    {
+        int64_t result = 0.0f;
+
+        try
+        {
+            if (cType[0] == CType::FLOAT)
+            {
+                result = std::bit_cast<float>((uint32_t)getValue());
+            }
+            else if (cType[0] == CType::DOUBLE)
+            {
+                result = std::bit_cast<double>(getValue());
+            }
+            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))) && data->CTypeSize(cType[0]) != 8)
+            {
+                result = -(int64_t)getValue();
+            }
+            else
+            {
+                result = (int64_t)getValue();
+            }
+        }
+        catch (const std::out_of_range &e)
+        {
+            result = 0.0f;
+        }
+        return result;
+    }
+
+    template <typename Op>
+    SymbolDescriptor SymbolDescriptor::applyArithmetic(const SymbolDescriptor &right, Op op) const
+    {
+        SymbolDescriptor result;
+        result.cType = cType;
+        result.isSigned = isSigned;
+        result.hasAddress = false;
+        switch (cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) + std::bit_cast<float>((uint32_t)right.getValue()));
+            result.value = std::bit_cast<uint32_t>(op(toFloat(), right.toFloat()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) + std::bit_cast<double>(right.getValue()));
+            result.value = std::bit_cast<uint64_t>(op(toDouble(), right.toDouble()));
             break;
         default:
-            result.value += right.getValue();
+            result.value = isSigned ? (uint64_t)op(toSigned(), right.toSigned()) : (op(getValue(), right.getValue()));
             break;
         }
         return result;
+    }
+
+    template <typename Op>
+    SymbolDescriptor SymbolDescriptor::applyComparison(const SymbolDescriptor &right, Op op) const
+    {
+        SymbolDescriptor result;
+        result.cType = cType;
+        result.isSigned = isSigned;
+        result.hasAddress = false;
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
+        switch (cType[0])
+        {
+        case CType::FLOAT:
+            result.value = std::bit_cast<char>(op(toFloat(), right.toFloat()));
+            break;
+        case CType::DOUBLE:
+            result.value = std::bit_cast<char>(op(toDouble(), right.toDouble()));
+            break;
+        default:
+            result.value = std::bit_cast<char>(isSigned ? op(toSigned(), right.toSigned()) : (op(getValue(), right.getValue())));
+            break;
+        }
+        return result;
+    }
+
+    template <typename Op>
+    SymbolDescriptor SymbolDescriptor::applyLogical(const SymbolDescriptor &right, Op op) const
+    {
+        SymbolDescriptor result;
+        result.isSigned = isSigned;
+        result.hasAddress = false;
+        result.cType.clear();
+        result.cType.push_back(CType::BOOL);
+        switch (cType[0])
+        {
+        case CType::FLOAT:
+            result.value = std::bit_cast<char>(op(toFloat(), right.toFloat()));
+            break;
+        case CType::DOUBLE:
+            result.value = std::bit_cast<char>(op(toDouble(), right.toDouble()));
+            break;
+        default:
+            result.value = std::bit_cast<bool>(op(getValue(), right.getValue()));
+            break;
+        }
+        return result;
+    }
+
+    template <typename Op>
+    SymbolDescriptor SymbolDescriptor::applyBitwise(const SymbolDescriptor &right, Op op) const
+    {
+        SymbolDescriptor result;
+        result.cType = cType;
+        result.isSigned = isSigned;
+        result.hasAddress = false;
+        result.value = op(getValue(), right.getValue());
+        return result;
+    }
+
+    SymbolDescriptor SymbolDescriptor::operator+(const SymbolDescriptor &right) const
+    {
+        return applyArithmetic(right, std::plus<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator-(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) - std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) - std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value -= right.getValue();
-            break;
-        }
-        return result;
+        return applyArithmetic(right, std::minus<>());
+    }
+
+    SymbolDescriptor SymbolDescriptor::operator-() const
+    {
+        return applyArithmetic(*this, [](auto a, auto)
+                               { return -a; });
     }
 
     SymbolDescriptor SymbolDescriptor::operator*(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) * std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) * std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value *= right.getValue();
-            break;
-        }
-        return result;
+        return applyArithmetic(right, std::multiplies<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator/(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(std::bit_cast<float>((uint32_t)result.getValue()) / std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<uint64_t>(std::bit_cast<double>(result.getValue()) / std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value /= right.getValue();
-            break;
-        }
-        return result;
+        return applyArithmetic(right, std::divides<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator%(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
+        SymbolDescriptor result;
+        result.cType.push_back(CType::INT);
+        result.isSigned = isSigned;
+        result.value = getValue();
         result.value %= right.getValue();
+        result.hasAddress = false;
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator==(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) == std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) == std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() == right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::equal_to<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator!=(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) != std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) != std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() != right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::not_equal_to<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator<(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) < std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) < std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() < right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::less<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator>(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) > std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) > std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() > right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::greater<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator<=(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) <= std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) <= std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() <= right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::less_equal<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator>=(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        switch (result.cType[0])
-        {
-        case CType::FLOAT:
-            result.value = std::bit_cast<char>(std::bit_cast<float>((uint32_t)result.getValue()) >= std::bit_cast<float>((uint32_t)right.getValue()));
-            break;
-        case CType::DOUBLE:
-            result.value = std::bit_cast<char>(std::bit_cast<double>(result.getValue()) >= std::bit_cast<double>(right.getValue()));
-            break;
-        default:
-            result.value = (bool)(result.getValue() >= right.getValue());
-            break;
-        }
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyComparison(right, std::greater_equal<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator&&(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        result.value = (bool)result.getValue() && (bool)right.getValue();
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyLogical(right, std::logical_and<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator||(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        result.value = (bool)result.getValue() || (bool)right.getValue();
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyLogical(right, std::logical_or<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator!() const
     {
-        SymbolDescriptor result = *this;
-        result.value = !((bool)result.getValue());
-        result.cType.clear();
-        result.cType.push_back(CType::BOOL);
-        return result;
+        return applyLogical(*this, [](auto a, auto)
+                            { return !a; });
     }
 
     SymbolDescriptor SymbolDescriptor::operator&(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        result.value &= right.getValue();
-        return result;
+        return applyBitwise(right, std::bit_and<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator|(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        result.value &= right.getValue();
-        return result;
+        return applyBitwise(right, std::bit_or<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator^(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
-        result.value &= right.getValue();
-        return result;
+        return applyBitwise(right, std::bit_xor<>());
     }
 
     SymbolDescriptor SymbolDescriptor::operator~() const
     {
-        SymbolDescriptor result = *this;
-        result.value = ~result.getValue();
+        SymbolDescriptor result;
+        result.isSigned = isSigned;
+        result.hasAddress = false;
+        result.value = ~getValue();
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator<<(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
+        SymbolDescriptor result;
+        result.isSigned = isSigned;
+        result.value = getValue();
         result.value <<= right.getValue();
+        result.hasAddress = false;
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::operator>>(const SymbolDescriptor &right) const
     {
-        SymbolDescriptor result = *this;
+        SymbolDescriptor result;
+        result.isSigned = isSigned;
+        result.value = getValue();
         result.value >>= right.getValue();
+        result.hasAddress = false;
         return result;
     }
 } // namespace CdbgExpr

@@ -6,36 +6,34 @@
 #include <stdexcept>
 #include <cctype>
 #include <functional>
+#include <memory>
 #include "SymbolDescriptor.h"
 
 namespace CdbgExpr
 {
+    enum class TokenType
+    {
+        SYMBOL,
+        NUMBER,
+        OPERATOR,
+        UNARY_OPERATOR,
+        PARENTHESIS,
+        ARRAY_ACCESS,
+        STRUCT_ACCESS,
+        ASSIGNMENT,
+        FUNCTION_CALL,
+    };
+
+    struct Token
+    {
+        TokenType type;
+        std::string value;
+    };
+
     class Expression
     {
     public:
-        enum class TokenType
-        {
-            SYMBOL,
-            NUMBER,
-            OPERATOR,
-            PARENTHESIS,
-            ARRAY_ACCESS,
-            STRUCT_ACCESS,
-            ASSIGNMENT,
-            FUNCTION_CALL,
-        };
-
-        struct Token
-        {
-            TokenType type;
-            std::string value;
-        };
-
-        Expression(const std::string &expr, DbgData *dbgData)
-            : expr_(expr), pos_(0), dbgData(dbgData), assignmentAllowed_(false)
-        {
-            SymbolDescriptor::data = dbgData;
-        }
+        Expression(const std::string &expr, DbgData *dbgData);
         ~Expression();
 
         SymbolDescriptor eval(bool assignmentAllowed);
@@ -44,229 +42,85 @@ namespace CdbgExpr
         std::string expr_;
         uint64_t pos_;
         DbgData *dbgData;
-        bool assignmentAllowed_;
         std::vector<Token> tokens;
 
         void tokenize(const std::string &expr);
-        std::vector<Token> convertToPostfix(const std::vector<Token> &tokens);
-        int getPrecedence(const Token &token);
-        SymbolDescriptor parseExpression();
-
-        SymbolDescriptor parseBinaryOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op);
-        SymbolDescriptor parseArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index);
-        SymbolDescriptor parseMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess);
-
-        // void skipWhitespace()
-        // {
-        //     while (pos_ < expr_.size() && std::isspace(expr_[pos_]))
-        //     {
-        //         ++pos_;
-        //     }
-        // }
-
-        // SymbolDescriptor parseAssignment()
-        // {
-        //     skipWhitespace();
-        //     uint64_t startPos = pos_;
-
-        //     if (pos_ < expr_.size() && (std::isalpha(expr_[pos_]) || expr_[pos_] == '_'))
-        //     {
-        //         std::string id = parseIdentifier();
-        //         skipWhitespace();
-        //         if (pos_ < expr_.size() && expr_[pos_] == '=')
-        //         {
-        //             if (!assignmentAllowed_)
-        //             {
-        //                 throw std::runtime_error("Assignment not allowed.");
-        //             }
-
-        //             pos_++;
-        //             SymbolDescriptor rhs = parseAssignment();
-        //             SymbolDescriptor &sym = dbgData_->getSymbol(id);
-        //             sym.value = rhs.value;
-        //             return rhs;
-        //         }
-        //         else
-        //         {
-        //             pos_ = startPos;
-        //         }
-        //     }
-        //     return parseMemberAccess();
-        // }
-
-        // SymbolDescriptor parseMemberAccess()
-        // {
-        //     SymbolDescriptor value = parseAddSub();
-        //     skipWhitespace();
-        //     while (pos_ < expr_.size() && expr_[pos_] == '.')
-        //     {
-        //         pos_++;
-        //         std::string memberName = parseIdentifier();
-        //         if (value.cType.empty() || value.cType[0] != CType::STRUCT)
-        //         {
-        //             throw std::runtime_error("Attempted member access on non-struct");
-        //         }
-        //         bool found = false;
-        //         for (const auto &member : value.members)
-        //         {
-        //             if (member.symbol->name == memberName)
-        //             {
-        //                 value = *member.symbol;
-        //                 found = true;
-        //                 break;
-        //             }
-        //         }
-        //         if (!found)
-        //         {
-        //             throw std::runtime_error("Struct member not found: " + memberName);
-        //         }
-        //         skipWhitespace();
-        //     }
-        //     return value;
-        // }
-
-        // SymbolDescriptor parseAddSub()
-        // {
-        //     SymbolDescriptor value = parseMulDiv();
-        //     skipWhitespace();
-        //     while (pos_ < expr_.size() && (expr_[pos_] == '+' || expr_[pos_] == '-'))
-        //     {
-        //         char op = expr_[pos_++];
-        //         SymbolDescriptor rhs = parseMulDiv();
-        //         value.value = (op == '+') ? (intptr_t)value.value + (intptr_t)rhs.value : (intptr_t)value.value - (intptr_t)rhs.value;
-        //         skipWhitespace();
-        //     }
-        //     return value;
-        // }
-
-        // SymbolDescriptor parseMulDiv()
-        // {
-        //     SymbolDescriptor value = parseUnary();
-        //     skipWhitespace();
-        //     while (pos_ < expr_.size() && (expr_[pos_] == '*' || expr_[pos_] == '/'))
-        //     {
-        //         char op = expr_[pos_++];
-        //         SymbolDescriptor rhs = parseUnary();
-        //         if (op == '/' && (intptr_t)rhs.value == 0)
-        //         {
-        //             throw std::runtime_error("Division by zero");
-        //         }
-        //         value.value = ((op == '*') ? (intptr_t)value.value * (intptr_t)rhs.value : (intptr_t)value.value / (intptr_t)rhs.value);
-        //         skipWhitespace();
-        //     }
-        //     return value;
-        // }
-
-        // SymbolDescriptor parseUnary()
-        // {
-        //     skipWhitespace();
-        //     if (pos_ < expr_.size() && expr_[pos_] == '*')
-        //     {
-        //         pos_++;
-        //         SymbolDescriptor ptr = parseUnary();
-        //         if (ptr.cType.empty() || ptr.cType[0] != CType::POINTER)
-        //         {
-        //             throw std::runtime_error("Cannot dereference non-pointer");
-        //         }
-        //         return dbgData_->dereference(ptr);
-        //     }
-        //     else if (pos_ < expr_.size() && expr_[pos_] == '-')
-        //     {
-        //         pos_++;
-        //         SymbolDescriptor value = parseUnary();
-        //         value.value = ((intptr_t)value.value * -1);
-        //         return value;
-        //     }
-        //     return parsePrimary();
-        // }
-
-        // SymbolDescriptor parsePrimary()
-        // {
-        //     skipWhitespace();
-
-        //     if (pos_ < expr_.size() && expr_[pos_] == '(')
-        //     {
-        //         pos_++;
-        //         SymbolDescriptor value = parseAssignment();
-        //         skipWhitespace();
-        //         if (pos_ >= expr_.size() || expr_[pos_] != ')')
-        //             throw std::runtime_error("Expected closing parenthesis");
-        //         pos_++;
-        //         return value;
-        //     }
-        //     else if (pos_ < expr_.size() && std::isdigit(expr_[pos_]))
-        //     {
-        //         SymbolDescriptor value;
-        //         value.value = (intptr_t)parseNumber();
-        //         value.cType = {CType::INT};
-        //         return value;
-        //     }
-        //     else if (pos_ < expr_.size() && (std::isalpha(expr_[pos_]) || expr_[pos_] == '_'))
-        //     {
-        //         std::string id = parseIdentifier();
-        //         SymbolDescriptor sym = dbgData_->getSymbol(id);
-
-        //         while (pos_ < expr_.size() && expr_[pos_] == '[')
-        //         {
-        //             if (sym.cType.empty() || (sym.cType[0] != CType::POINTER && sym.cType[0] != CType::ARRAY))
-        //             {
-        //                 throw std::runtime_error("Invalid indexing on non-array type");
-        //             }
-        //             pos_++; // Consume '['
-
-        //             uint64_t index = parseAssignment().value;
-
-        //             skipWhitespace();
-
-        //             if (pos_ >= expr_.size() || expr_[pos_] != ']')
-        //             {
-        //                 throw std::runtime_error("Expected closing bracket in array index");
-        //             }
-
-        //             pos_++; // Consume ']'
-
-        //             if (sym.cType[0] == CType::ARRAY && index >= sym.size)
-        //             {
-        //                 throw std::runtime_error("Array index out of bounds");
-        //             }
-
-        //             if (sym.cType.size() < 2)
-        //             {
-        //                 throw std::runtime_error("Array must have a type");
-        //             }
-
-        //             uint64_t elementSize = dbgData_->CTypeSize(sym.cType[1]);
-        //             sym = dbgData_->dereference(sym, index * elementSize);
-        //         }
-
-        //         return sym;
-        //     }
-
-        //     throw std::runtime_error("Unexpected token in expression");
-        // }
-
-        // int parseNumber()
-        // {
-        //     skipWhitespace();
-        //     int value = 0;
-        //     while (pos_ < expr_.size() && std::isdigit(expr_[pos_]))
-        //     {
-        //         value = value * 10 + (expr_[pos_++] - '0');
-        //     }
-        //     return value;
-        // }
-
-        // std::string parseIdentifier()
-        // {
-        //     skipWhitespace();
-        //     std::string id;
-        //     while (pos_ < expr_.size() && (std::isalnum(expr_[pos_]) || expr_[pos_] == '_'))
-        //     {
-        //         id.push_back(expr_[pos_++]);
-        //     }
-        //     return id;
-        // }
     };
+
+    SymbolDescriptor evalUnaryOperator(const SymbolDescriptor &operand, const std::string &op);
+    SymbolDescriptor evalBinaryOperator(SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op);
+    SymbolDescriptor evalArithmeticOperator(const SymbolDescriptor &left, const SymbolDescriptor &right, const std::string &op);
+    SymbolDescriptor evalArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index);
+    SymbolDescriptor evalMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess);
+    int getPrecedence(const Token &token);
+
+    class ASTNode
+    {
+    public:
+        virtual ~ASTNode() = default;
+        virtual SymbolDescriptor evaluate() = 0;
+        static DbgData *data;
+    };
+
+    class BinaryOpNode : public ASTNode
+    {
+    public:
+        std::string op;
+        std::unique_ptr<ASTNode> left, right;
+
+        BinaryOpNode(std::string op, std::unique_ptr<ASTNode> lhs, std::unique_ptr<ASTNode> rhs);
+
+        SymbolDescriptor evaluate() override;
+    };
+
+    class UnaryOpNode : public ASTNode
+    {
+    public:
+        std::string op;
+        std::unique_ptr<ASTNode> operand;
+
+        UnaryOpNode(std::string op, std::unique_ptr<ASTNode> operand);
+
+        SymbolDescriptor evaluate() override;
+    };
+
+    class LiteralNode : public ASTNode
+    {
+    public:
+        SymbolDescriptor value;
+
+        explicit LiteralNode(SymbolDescriptor val);
+
+        SymbolDescriptor evaluate() override;
+    };
+
+    class SymbolNode : public ASTNode
+    {
+    public:
+        std::string name;
+
+        SymbolNode(std::string name);
+
+        SymbolDescriptor evaluate() override;
+    };
+
+
+    class ExpressionParser
+    {
+        std::vector<Token> tokens;
+        size_t index;
+        DbgData *debuggerData;
+
+        std::unique_ptr<ASTNode> parsePrimary();
+
+        std::unique_ptr<ASTNode> parseExpression(int minPrecedence);
+
+    public:
+        ExpressionParser(std::vector<Token> tokens, DbgData *debuggerData);
+
+        std::unique_ptr<ASTNode> parse();
+    };
+
 } // namespace CdbgExpr
 
 #endif // _CDBG_EXPR_H_
