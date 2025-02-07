@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <variant>
+#include <unordered_map>
 
 namespace CdbgExpr
 {
@@ -47,7 +49,7 @@ namespace CdbgExpr
         virtual SymbolDescriptor &getSymbol(const std::string &) = 0;
         virtual uint8_t getByte(uint64_t) = 0;
         virtual void setByte(uint64_t, uint8_t) = 0;
-        virtual uint8_t CTypeSize(CType) = 0;
+        virtual constexpr uint8_t CTypeSize(CType) = 0;
         uint64_t invalidAddress = 0;
     };
 
@@ -62,16 +64,23 @@ namespace CdbgExpr
     public:
         static DbgData* data;
         static bool assignmentAllowed;
-        // Common fields.
-        std::string name;   // Name of the symbol or type.
-        uint64_t value;
+
+        std::string name;
+        std::variant<uint64_t, int64_t, double> value;
         bool hasAddress = false;
         uint64_t size = 0;
         bool isSigned = false;
+        std::unordered_map<std::string, Member> members;
 
         // C type information.
         std::vector<CType> cType;
-        std::vector<Member> members;
+
+        static uint64_t value_to_uint64_b(const std::variant<uint64_t, int64_t, double> &v);
+        static uint64_t value_to_uint64_n(const std::variant<uint64_t, int64_t, double> &v);
+        static int64_t value_to_int64_b(const std::variant<uint64_t, int64_t, double> &v);
+        static int64_t value_to_int64_n(const std::variant<uint64_t, int64_t, double> &v);
+        static double value_to_double_b(const std::variant<uint64_t, int64_t, double> &v);
+        static double value_to_double_n(const std::variant<uint64_t, int64_t, double> &v);
 
         static SymbolDescriptor strToNumber(const std::string &str);
 
@@ -79,8 +88,8 @@ namespace CdbgExpr
         SymbolDescriptor getMember(const std::string &name) const;
         SymbolDescriptor addressOf() const;
 
-        void setValue(uint64_t val);
-        uint64_t getValue() const;
+        void setValue(const std::variant<uint64_t, int64_t, double>& val);
+        std::variant<uint64_t, int64_t, double> getValue() const;
 
         std::string toString() const;
 
@@ -88,6 +97,7 @@ namespace CdbgExpr
 
         float toFloat() const;
         double toDouble() const;
+        uint64_t toUnsigned() const;
         int64_t toSigned() const;
 
         template <typename Op> SymbolDescriptor applyArithmetic(const SymbolDescriptor &right, Op op) const;

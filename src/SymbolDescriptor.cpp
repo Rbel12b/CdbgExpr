@@ -4,11 +4,82 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include "SymbolDescriptor.h"
 
 namespace CdbgExpr
 {
     DbgData *SymbolDescriptor::data = nullptr;
     bool SymbolDescriptor::assignmentAllowed = false;
+
+    uint64_t SymbolDescriptor::value_to_uint64_b(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::get<uint64_t>(v);
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<uint64_t>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::bit_cast<uint64_t>(std::get<double>(v));  // Binary representation
+        }
+        return 0;
+    }
+
+    uint64_t SymbolDescriptor::value_to_uint64_n(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::get<uint64_t>(v);
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<uint64_t>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return static_cast<uint64_t>(std::get<double>(v));  // Binary representation
+        }
+        return 0;
+    }
+
+    int64_t SymbolDescriptor::value_to_int64_b(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::get<uint64_t>(v);
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<uint64_t>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::bit_cast<uint64_t>(std::get<double>(v));  // Binary representation
+        }
+        return 0;
+    }
+
+    int64_t SymbolDescriptor::value_to_int64_n(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::get<uint64_t>(v);
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<uint64_t>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return static_cast<uint64_t>(std::get<double>(v));  // Binary representation
+        }
+        return 0;
+    }
+    double SymbolDescriptor::value_to_double_b(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::bit_cast<double>(std::get<uint64_t>(v));
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return std::bit_cast<double>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::get<double>(v);  // Binary representation
+        }
+        return 0;
+    }
+    double SymbolDescriptor::value_to_double_n(const std::variant<uint64_t, int64_t, double> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return static_cast<double>(std::get<uint64_t>(v));
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<double>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::get<double>(v);  // Binary representation
+        }
+        return 0;
+    }
 
     SymbolDescriptor SymbolDescriptor::strToNumber(const std::string &str)
     {
@@ -28,32 +99,31 @@ namespace CdbgExpr
         SymbolDescriptor result;
         result.cType = cType;
         result.cType.erase(result.cType.begin());
-        result.value = getValue() + (offset * data->CTypeSize(result.cType[0]));
+        result.value = value_to_uint64_n(getValue()) + (offset * data->CTypeSize(result.cType[0]));
         result.hasAddress = true;
         return result;
     }
 
     SymbolDescriptor SymbolDescriptor::getMember(const std::string &name) const
     {
-        auto it = std::find_if(members.begin(), members.end(), [name](const Member &member)
-                               { return member.symbol->name == name; });
+        auto it = members.find(name);
         if (it == members.end())
         {
             throw std::runtime_error("Member not found");
         }
-        return *it->symbol;
+        return *(it->second.symbol);
     }
 
     SymbolDescriptor SymbolDescriptor::addressOf() const
     {
-        size_t addr;
+        uint64_t addr;
         if (!hasAddress)
         {
             addr = data->invalidAddress;
         }
         else
         {
-            addr = value;
+            addr = value_to_uint64_b(value);
         }
         SymbolDescriptor result;
         result.cType = cType;
@@ -63,13 +133,14 @@ namespace CdbgExpr
         return result;
     }
 
-    void SymbolDescriptor::setValue(uint64_t val)
+    void SymbolDescriptor::setValue(const std::variant<uint64_t, int64_t, double>& val)
     {
         if (hasAddress)
         {
+            uint64_t newValue = value_to_uint64_b(val);
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
-                data->setByte(value + i, ((val >> (i * 8)) & 0xFF));
+                data->setByte(value_to_uint64_b(value) + i, ((newValue >> (i * 8)) & 0xFF));
             }
         }
         else
@@ -78,19 +149,19 @@ namespace CdbgExpr
         }
     }
 
-    uint64_t SymbolDescriptor::getValue() const
+    std::variant<uint64_t, int64_t, double> SymbolDescriptor::getValue() const
     {
         uint64_t val = 0;
         if (hasAddress)
         {
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
-                val |= data->getByte(value + i) << (i * 8);
+                val |= data->getByte(value_to_uint64_b(value) + i) << (i * 8);
             }
         }
         else
         {
-            val = value;
+            val = value_to_uint64_b(value);
         }
         return val;
     }
@@ -148,16 +219,16 @@ namespace CdbgExpr
         {
             if (cType[1] == CType::CHAR)
             {
-                if (!getValue())
+                if (!value_to_uint64_b(getValue()))
                 {
                     return "0x0";
                 }
                 else
                 {
-                    result << "0x" << std::hex << reinterpret_cast<uint64_t>(getValue());
+                    result << "0x" << std::hex << value_to_uint64_b(getValue());
                 }
                 result << " \"";
-                uint64_t addr = reinterpret_cast<uint64_t>(getValue());
+                uint64_t addr = value_to_uint64_b(getValue());
                 char ch;
                 while ((ch = static_cast<char>(data->getByte(addr++))) != '\0')
                 {
@@ -168,49 +239,31 @@ namespace CdbgExpr
             }
             else
             {
-                result << "0x" << std::hex << reinterpret_cast<uint64_t>(getValue());
+                result << "0x" << std::hex << value_to_uint64_b(getValue());
                 return result.str();
             }
         }
 
         CType baseType = cType.back();
 
-        if (baseType == CType::INT)
-        {
-            return result.str() + std::to_string(getValue());
-        }
-        else if (baseType == CType::FLOAT)
-        {
-            return result.str() + std::to_string((float)getValue());
-        }
-        else if (baseType == CType::DOUBLE)
-        {
-            return result.str() + std::to_string((double)(getValue()));
-        }
-        else if (baseType == CType::BOOL)
-        {
-            return result.str() + ((bool)getValue() ? "true" : "false");
-        }
-        else if (baseType == CType::CHAR)
-        {
-            return result.str() + (char)getValue();
-        }
-        else if (baseType == CType::STRUCT)
+        if (baseType == CType::STRUCT)
         {
             result << "{ ";
-            for (uint64_t i = 0; i < members.size(); i++)
+            for (auto& member : members)
             {
-                if (i > 0)
-                {
-                    result << ", ";
-                }
-                result << members[i].symbol->name << " = " << members[i].symbol->toString();
+                result << member.first << " = ";
+                result << member.second.symbol->toString();
+                result << ", ";
             }
             result << " }";
             return result.str();
         }
         else if (baseType == CType::ARRAY)
         {
+        }
+        else
+        {
+            return std::visit([](auto && value) { return std::to_string(value); }, getValue());
         }
 
         return result.str() + "<unsupported type>";
@@ -228,92 +281,22 @@ namespace CdbgExpr
 
     float SymbolDescriptor::toFloat() const
     {
-        float result = 0.0f;
-
-        try
-        {
-            if (cType[0] == CType::FLOAT)
-            {
-                result = std::bit_cast<float>((uint32_t)getValue());
-            }
-            else if (cType[0] == CType::DOUBLE)
-            {
-                result = std::bit_cast<double>(getValue());
-            }
-            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))))
-            {
-                result = -1.0f * (float)getValue();
-            }
-            else
-            {
-                result = (float)getValue();
-            }
-        }
-        catch (const std::out_of_range &e)
-        {
-            result = 0.0f;
-        }
-        return result;
+        return static_cast<float>(value_to_double_n(this->getValue()));
     }
 
     double SymbolDescriptor::toDouble() const
     {
-        double result = 0.0f;
+        return static_cast<double>(value_to_double_n(this->getValue()));
+    }
 
-        try
-        {
-            if (cType[0] == CType::FLOAT)
-            {
-                result = std::bit_cast<float>((uint32_t)getValue());
-            }
-            else if (cType[0] == CType::DOUBLE)
-            {
-                result = std::bit_cast<double>(getValue());
-            }
-            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))))
-            {
-                result = -1.0f * (double)getValue();
-            }
-            else
-            {
-                result = (double)getValue();
-            }
-        }
-        catch (const std::out_of_range &e)
-        {
-            result = 0.0f;
-        }
-        return result;
+    uint64_t SymbolDescriptor::toUnsigned() const
+    {
+        return static_cast<uint64_t>(value_to_uint64_n(this->getValue()));
     }
 
     int64_t SymbolDescriptor::toSigned() const
     {
-        int64_t result = 0.0f;
-
-        try
-        {
-            if (cType[0] == CType::FLOAT)
-            {
-                result = std::bit_cast<float>((uint32_t)getValue());
-            }
-            else if (cType[0] == CType::DOUBLE)
-            {
-                result = std::bit_cast<double>(getValue());
-            }
-            else if (isSigned && (getValue() & (0x01 << (data->CTypeSize(cType[0]) * 8 - 1))) && data->CTypeSize(cType[0]) != 8)
-            {
-                result = -(int64_t)getValue();
-            }
-            else
-            {
-                result = (int64_t)getValue();
-            }
-        }
-        catch (const std::out_of_range &e)
-        {
-            result = 0.0f;
-        }
-        return result;
+        return static_cast<int64_t>(value_to_int64_n(this->getValue()));
     }
 
     template <typename Op>
@@ -326,13 +309,13 @@ namespace CdbgExpr
         switch (cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<uint32_t>(op(toFloat(), right.toFloat()));
+            result.value = static_cast<uint64_t>(std::bit_cast<uint32_t>(op(toFloat(), right.toFloat())));
             break;
         case CType::DOUBLE:
             result.value = std::bit_cast<uint64_t>(op(toDouble(), right.toDouble()));
             break;
         default:
-            result.value = isSigned ? (uint64_t)op(toSigned(), right.toSigned()) : (op(getValue(), right.getValue()));
+            result.value = isSigned ? (uint64_t)op(toSigned(), right.toSigned()) : (op(toUnsigned(), right.toUnsigned()));
             break;
         }
         return result;
@@ -356,7 +339,7 @@ namespace CdbgExpr
             result.value = std::bit_cast<char>(op(toDouble(), right.toDouble()));
             break;
         default:
-            result.value = std::bit_cast<char>(isSigned ? op(toSigned(), right.toSigned()) : (op(getValue(), right.getValue())));
+            result.value = std::bit_cast<char>(isSigned ? op(toSigned(), right.toSigned()) : (op(toUnsigned(), right.toUnsigned())));
             break;
         }
         return result;
@@ -373,13 +356,13 @@ namespace CdbgExpr
         switch (cType[0])
         {
         case CType::FLOAT:
-            result.value = std::bit_cast<char>(op(toFloat(), right.toFloat()));
+            result.value = static_cast<uint64_t>(op(toFloat(), right.toFloat()));
             break;
         case CType::DOUBLE:
-            result.value = std::bit_cast<char>(op(toDouble(), right.toDouble()));
+            result.value = static_cast<uint64_t>(op(toDouble(), right.toDouble()));
             break;
         default:
-            result.value = std::bit_cast<bool>(op(getValue(), right.getValue()));
+            result.value = static_cast<uint64_t>(op(toUnsigned(), right.toUnsigned()));
             break;
         }
         return result;
@@ -392,7 +375,7 @@ namespace CdbgExpr
         result.cType = cType;
         result.isSigned = isSigned;
         result.hasAddress = false;
-        result.value = op(getValue(), right.getValue());
+        result.value = op(toUnsigned(), right.toUnsigned());
         return result;
     }
 
@@ -428,7 +411,7 @@ namespace CdbgExpr
         result.cType.push_back(CType::INT);
         result.isSigned = isSigned;
         result.value = getValue();
-        result.value %= right.getValue();
+        result.value = result.toUnsigned() % right.toUnsigned();
         result.hasAddress = false;
         return result;
     }
@@ -499,7 +482,7 @@ namespace CdbgExpr
         SymbolDescriptor result;
         result.isSigned = isSigned;
         result.hasAddress = false;
-        result.value = ~getValue();
+        result.value = ~toUnsigned();
         return result;
     }
 
@@ -508,7 +491,7 @@ namespace CdbgExpr
         SymbolDescriptor result;
         result.isSigned = isSigned;
         result.value = getValue();
-        result.value <<= right.getValue();
+        result.value = result.toUnsigned() << right.toUnsigned();
         result.hasAddress = false;
         return result;
     }
@@ -518,7 +501,7 @@ namespace CdbgExpr
         SymbolDescriptor result;
         result.isSigned = isSigned;
         result.value = getValue();
-        result.value >>= right.getValue();
+        result.value = result.toUnsigned() >> right.toUnsigned();
         result.hasAddress = false;
         return result;
     }

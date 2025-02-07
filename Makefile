@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX := g++
-CXXFLAGS := -g -Wall -Wextra -std=c++23 -Iinclude
+CXXFLAGS := -g -fsanitize=address -Wall -Wextra -std=c++23 -Iinclude
 
 # Target library
 TARGET := libCdbgExpr.a

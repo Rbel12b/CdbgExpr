@@ -292,7 +292,7 @@ namespace CdbgExpr
         {
             throw std::runtime_error("Cannot index a non-array type");
         }
-        int idx = index.getValue();
+        int idx = index.toUnsigned();
         return array.dereference(idx);
     }
 
@@ -361,8 +361,12 @@ namespace CdbgExpr
         else if (token.type == TokenType::PARENTHESIS && token.value == "(")
         {
             auto expr = parseExpression(1);
-            if (tokens[index].type != TokenType::PARENTHESIS && tokens[index].value != ")")
+            if (index >= tokens.size() || (tokens[index].type != TokenType::PARENTHESIS && tokens[index].value != ")"))
             {
+                if (index >= tokens.size())
+                {
+                    throw std::runtime_error("Expected closing parenthesis, index: " + std::to_string(index));
+                }
                 throw std::runtime_error("Expected closing parenthesis: " + tokens[index].value + ", index: " + std::to_string(index));
             }
             ++index;
