@@ -32,6 +32,7 @@ namespace CdbgExpr
         CHAR,
         SHORT,
         LONG,
+        LONGLONG,
         FLOAT,
         DOUBLE,
         STRUCT,
@@ -75,6 +76,13 @@ namespace CdbgExpr
         // C type information.
         std::vector<CType> cType;
 
+        SymbolDescriptor() = default;
+        SymbolDescriptor(const char* s);
+        SymbolDescriptor(const std::string& s);
+        SymbolDescriptor(double d);
+        SymbolDescriptor(int64_t i);
+        SymbolDescriptor(uint64_t u);
+
         static uint64_t value_to_uint64_b(const std::variant<uint64_t, int64_t, double> &v);
         static uint64_t value_to_uint64_n(const std::variant<uint64_t, int64_t, double> &v);
         static int64_t value_to_int64_b(const std::variant<uint64_t, int64_t, double> &v);
@@ -82,7 +90,19 @@ namespace CdbgExpr
         static double value_to_double_b(const std::variant<uint64_t, int64_t, double> &v);
         static double value_to_double_n(const std::variant<uint64_t, int64_t, double> &v);
 
-        static SymbolDescriptor strToNumber(const std::string &str);
+        static CType promoteType(const CType &left, const CType &right);
+
+        void fromString(const std::string &str);
+        void fromDouble(const double &val);
+        void fromInt(const int64_t &val);
+        void fromUint(const uint64_t &val);
+
+        
+        friend std::ostream& operator<<(std::ostream& os, const SymbolDescriptor& obj)
+        {
+            os << obj.toString();
+            return os;
+        }
 
         SymbolDescriptor dereference(int offset = 0) const;
         SymbolDescriptor getMember(const std::string &name) const;

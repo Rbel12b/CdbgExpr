@@ -352,7 +352,7 @@ namespace CdbgExpr
         Token token = tokens[index++];
         if (token.type == TokenType::NUMBER)
         {
-            return std::make_unique<LiteralNode>(SymbolDescriptor::strToNumber(token.value));
+            return std::make_unique<LiteralNode>(SymbolDescriptor(token.value));
         }
         else if (token.type == TokenType::SYMBOL)
         {
