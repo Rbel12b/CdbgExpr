@@ -124,7 +124,7 @@ namespace CdbgExpr
         {    
             return 16;
         }
-        else if (precedence.find(token.value) != precedence.end())
+        else if (precedence.contains(token.value))
         {
             return precedence.at(token.value);
         }
