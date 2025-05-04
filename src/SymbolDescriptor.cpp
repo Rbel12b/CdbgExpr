@@ -113,6 +113,10 @@ namespace CdbgExpr
         {
             return CType::DOUBLE;
         }
+        if (left == CType::POINTER || right == CType::POINTER)
+        {
+            return CType::POINTER;
+        }
         return (data->CTypeSize(left) > data->CTypeSize(right)) ? left : right;
     }
 
