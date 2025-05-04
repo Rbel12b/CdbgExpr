@@ -288,20 +288,25 @@ namespace CdbgExpr
             result << "<unknown type>";
             return result.str();
         }
-        if (!isSigned && cType[0] != CType::STRUCT && cType[0] != CType::BOOL &&
-            cType[0] != CType::FLOAT && cType[0] != CType::DOUBLE)
+        if (!isSigned && cType[i] != CType::STRUCT && cType[i] != CType::BOOL &&
+            cType[i] != CType::FLOAT && cType[i] != CType::DOUBLE && cType[i] != CType::VOID)
         {
-            result << "unsigned ";
+            result << "unsigned";
         }
-        for (i = 0; i < cType.size(); i++)
+        for (; i < cType.size(); i++)
         {
+            result << " ";
             if (cType[i] == CType::POINTER)
             {
                 result << "*";
             }
+            else if (cType[i] == CType::VOID)
+            {
+                result << "void";
+            }
             else if (cType[i] == CType::STRUCT)
             {
-                result << "struct ";
+                result << "struct";
             }
             else if (cType[i] == CType::CHAR)
             {
