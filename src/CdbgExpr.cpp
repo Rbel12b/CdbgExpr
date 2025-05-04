@@ -372,7 +372,7 @@ namespace CdbgExpr
             ++index;
             return expr;
         }
-        throw std::runtime_error("Unexpected token in primary expression: " + tokens[index].value + ", index: " + std::to_string(index));
+        throw std::runtime_error("Unexpected token in primary expression: " + token.value + ", index: " + std::to_string(index - 1));
     }
 
     std::unique_ptr<ASTNode> ExpressionParser::parseExpression(int minPrecedence)
