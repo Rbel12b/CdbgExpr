@@ -47,10 +47,10 @@ namespace CdbgExpr
     class DbgData
     {
     public:
-        virtual SymbolDescriptor &getSymbol(const std::string &) = 0;
+        virtual SymbolDescriptor getSymbol(const std::string &) = 0;
         virtual uint8_t getByte(uint64_t) = 0;
         virtual void setByte(uint64_t, uint8_t) = 0;
-        virtual constexpr uint8_t CTypeSize(CType) = 0;
+        virtual uint8_t CTypeSize(CType) = 0;
         uint64_t invalidAddress = 0;
     };
 
