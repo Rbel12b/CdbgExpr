@@ -54,11 +54,7 @@ namespace CdbgExpr
         uint64_t invalidAddress = 0;
     };
 
-    struct Member
-    {
-        SymbolDescriptor symbol;  // The symbol information for this member.
-        int offset = 0;           // Member-specific offset.
-    };
+    class Member;
 
     class SymbolDescriptor
     {
@@ -148,6 +144,13 @@ namespace CdbgExpr
         SymbolDescriptor operator~() const;
         SymbolDescriptor operator<<(const SymbolDescriptor &right) const;
         SymbolDescriptor operator>>(const SymbolDescriptor &right) const;
+    };
+
+    class Member
+    {
+    public:
+        SymbolDescriptor symbol;  // The symbol information for this member.
+        int offset = 0;           // Member-specific offset.
     };
 
 } // namespace CdbgExpr
