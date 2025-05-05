@@ -56,7 +56,7 @@ namespace CdbgExpr
 
     struct Member
     {
-        SymbolDescriptor *symbol; // The symbol information for this member.
+        SymbolDescriptor symbol;  // The symbol information for this member.
         int offset = 0;           // Member-specific offset.
     };
 

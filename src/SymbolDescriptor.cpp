@@ -257,7 +257,7 @@ namespace CdbgExpr
         {
             throw std::runtime_error("Member not found");
         }
-        return *(it->second.symbol);
+        return (it->second.symbol);
     }
 
     SymbolDescriptor SymbolDescriptor::addressOf() const
@@ -424,7 +424,7 @@ namespace CdbgExpr
             for (auto& member : members)
             {
                 result << member.first << " = ";
-                result << member.second.symbol->toString();
+                result << member.second.symbol.toString();
                 result << ", ";
             }
             result << " }";
