@@ -67,7 +67,7 @@ namespace CdbgExpr
         static bool assignmentAllowed;
 
         std::string name;
-        std::variant<uint64_t, int64_t, double> value;
+        std::variant<uint64_t, int64_t, double, float> value;
         bool hasAddress = false;
         uint64_t size = 0;
         bool isSigned = false;
@@ -83,12 +83,14 @@ namespace CdbgExpr
         SymbolDescriptor(int64_t i);
         SymbolDescriptor(uint64_t u);
 
-        static uint64_t value_to_uint64_b(const std::variant<uint64_t, int64_t, double> &v);
-        static uint64_t value_to_uint64_n(const std::variant<uint64_t, int64_t, double> &v);
-        static int64_t value_to_int64_b(const std::variant<uint64_t, int64_t, double> &v);
-        static int64_t value_to_int64_n(const std::variant<uint64_t, int64_t, double> &v);
-        static double value_to_double_b(const std::variant<uint64_t, int64_t, double> &v);
-        static double value_to_double_n(const std::variant<uint64_t, int64_t, double> &v);
+        static uint64_t value_to_uint64_b(const std::variant<uint64_t, int64_t, double, float> &v);
+        static uint64_t value_to_uint64_n(const std::variant<uint64_t, int64_t, double, float> &v);
+        static int64_t value_to_int64_b(const std::variant<uint64_t, int64_t, double, float> &v);
+        static int64_t value_to_int64_n(const std::variant<uint64_t, int64_t, double, float> &v);
+        static double value_to_double_b(const std::variant<uint64_t, int64_t, double, float> &v);
+        static double value_to_double_n(const std::variant<uint64_t, int64_t, double, float> &v);
+        static float value_to_float_b(const std::variant<uint64_t, int64_t, double, float> &v);
+        static float value_to_float_n(const std::variant<uint64_t, int64_t, double, float> &v);
 
         static CType promoteType(const CType &left, const CType &right);
 
@@ -108,8 +110,8 @@ namespace CdbgExpr
         SymbolDescriptor getMember(const std::string &name) const;
         SymbolDescriptor addressOf() const;
 
-        void setValue(const std::variant<uint64_t, int64_t, double>& val);
-        std::variant<uint64_t, int64_t, double> getValue() const;
+        void setValue(const std::variant<uint64_t, int64_t, double, float>& val);
+        std::variant<uint64_t, int64_t, double, float> getValue() const;
 
         std::string toString() const;
 

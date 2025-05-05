@@ -36,74 +36,114 @@ namespace CdbgExpr
         fromUint(u);
     }
 
-    uint64_t SymbolDescriptor::value_to_uint64_b(const std::variant<uint64_t, int64_t, double> &v)
+    uint64_t SymbolDescriptor::value_to_uint64_b(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return std::get<uint64_t>(v);
         } else if (std::holds_alternative<int64_t>(v)) {
             return std::bit_cast<uint64_t>(std::get<int64_t>(v));
         } else if (std::holds_alternative<double>(v)) {
-            return std::bit_cast<uint64_t>(std::get<double>(v));  // Binary representation
+            return std::bit_cast<uint64_t>(std::get<double>(v));
+        } else if (std::holds_alternative<float>(v)) {
+            return std::bit_cast<uint32_t>(std::get<float>(v));
         }
         return 0;
     }
 
-    uint64_t SymbolDescriptor::value_to_uint64_n(const std::variant<uint64_t, int64_t, double> &v)
+    uint64_t SymbolDescriptor::value_to_uint64_n(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return std::get<uint64_t>(v);
         } else if (std::holds_alternative<int64_t>(v)) {
             return static_cast<uint64_t>(std::get<int64_t>(v));
         } else if (std::holds_alternative<double>(v)) {
-            return static_cast<uint64_t>(std::get<double>(v));  // Binary representation
+            return static_cast<uint64_t>(std::get<double>(v));
+        } else if (std::holds_alternative<float>(v)) {
+            return static_cast<uint64_t>(std::get<float>(v));
         }
         return 0;
     }
 
-    int64_t SymbolDescriptor::value_to_int64_b(const std::variant<uint64_t, int64_t, double> &v)
+    int64_t SymbolDescriptor::value_to_int64_b(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return std::bit_cast<int64_t>(std::get<uint64_t>(v));
         } else if (std::holds_alternative<int64_t>(v)) {
             return std::get<int64_t>(v);
         } else if (std::holds_alternative<double>(v)) {
-            return std::bit_cast<int64_t>(std::get<double>(v));  // Binary representation
+            return std::bit_cast<int64_t>(std::get<double>(v));
+        } else if (std::holds_alternative<float>(v)) {
+            return std::bit_cast<uint32_t>(std::get<float>(v));
         }
         return 0;
     }
 
-    int64_t SymbolDescriptor::value_to_int64_n(const std::variant<uint64_t, int64_t, double> &v)
+    int64_t SymbolDescriptor::value_to_int64_n(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return static_cast<int64_t>(std::get<uint64_t>(v));
         } else if (std::holds_alternative<int64_t>(v)) {
             return std::get<int64_t>(v);
         } else if (std::holds_alternative<double>(v)) {
-            return static_cast<int64_t>(std::get<double>(v));  // Binary representation
+            return static_cast<int64_t>(std::get<double>(v));
+        } else if (std::holds_alternative<float>(v)) {
+            return static_cast<int64_t>(std::get<float>(v));
         }
         return 0;
     }
-    double SymbolDescriptor::value_to_double_b(const std::variant<uint64_t, int64_t, double> &v)
+    double SymbolDescriptor::value_to_double_b(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return std::bit_cast<double>(std::get<uint64_t>(v));
         } else if (std::holds_alternative<int64_t>(v)) {
             return std::bit_cast<double>(std::get<int64_t>(v));
         } else if (std::holds_alternative<double>(v)) {
-            return std::get<double>(v);  // Binary representation
+            return std::get<double>(v);
+        } else if (std::holds_alternative<float>(v)) {
+            return std::get<float>(v);
         }
-        return 0;
+        return 0.0f;
     }
-    double SymbolDescriptor::value_to_double_n(const std::variant<uint64_t, int64_t, double> &v)
+    double SymbolDescriptor::value_to_double_n(const std::variant<uint64_t, int64_t, double, float> &v)
     {
         if (std::holds_alternative<uint64_t>(v)) {
             return static_cast<double>(std::get<uint64_t>(v));
         } else if (std::holds_alternative<int64_t>(v)) {
             return static_cast<double>(std::get<int64_t>(v));
         } else if (std::holds_alternative<double>(v)) {
-            return std::get<double>(v);  // Binary representation
+            return std::get<double>(v);
+        } else if (std::holds_alternative<float>(v)) {
+            return std::get<float>(v);
         }
-        return 0;
+        return 0.0f;
+    }
+
+    float SymbolDescriptor::value_to_float_b(const std::variant<uint64_t, int64_t, double, float> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return std::bit_cast<float>((uint32_t)std::get<uint64_t>(v));
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return std::bit_cast<float>((uint32_t)std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::bit_cast<float>((uint32_t)std::bit_cast<uint64_t>(std::get<double>(v)));
+        } else if (std::holds_alternative<float>(v)) {
+            return std::get<float>(v);
+        }
+        return 0.0f;
+    }
+
+    float SymbolDescriptor::value_to_float_n(const std::variant<uint64_t, int64_t, double, float> &v)
+    {
+        if (std::holds_alternative<uint64_t>(v)) {
+            return static_cast<float>(std::get<uint64_t>(v));
+        } else if (std::holds_alternative<int64_t>(v)) {
+            return static_cast<float>(std::get<int64_t>(v));
+        } else if (std::holds_alternative<double>(v)) {
+            return std::get<double>(v);
+        } else if (std::holds_alternative<float>(v)) {
+            return std::get<float>(v);
+        }
+        return 0.0f;
     }
 
     CType SymbolDescriptor::promoteType(const CType &left, const CType &right)
@@ -239,7 +279,7 @@ namespace CdbgExpr
         return result;
     }
 
-    void SymbolDescriptor::setValue(const std::variant<uint64_t, int64_t, double>& val)
+    void SymbolDescriptor::setValue(const std::variant<uint64_t, int64_t, double, float>& val)
     {
         if (hasAddress)
         {
@@ -255,7 +295,7 @@ namespace CdbgExpr
         }
     }
 
-    std::variant<uint64_t, int64_t, double> SymbolDescriptor::getValue() const
+    std::variant<uint64_t, int64_t, double, float> SymbolDescriptor::getValue() const
     {
         uint64_t val = 0;
         if (hasAddress)
@@ -413,7 +453,7 @@ namespace CdbgExpr
 
     float SymbolDescriptor::toFloat() const
     {
-        return static_cast<float>(value_to_double_n(this->getValue()));
+        return static_cast<float>(value_to_float_n(this->getValue()));
     }
 
     double SymbolDescriptor::toDouble() const
