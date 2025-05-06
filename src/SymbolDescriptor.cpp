@@ -22,6 +22,7 @@ namespace CdbgExpr
     CType CType::UNION{CType::Type::UNION};
     CType CType::POINTER{CType::Type::POINTER};
     CType CType::ARRAY{CType::Type::ARRAY};
+    CType CType::BITFIELD{CType::Type::BITFIELD};
     CType CType::UNKNOWN{CType::Type::UNKNOWN};
 
     DbgData *SymbolDescriptor::data = nullptr;

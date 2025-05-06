@@ -42,6 +42,7 @@ namespace CdbgExpr
             UNION,
             POINTER,
             ARRAY,
+            BITFIELD,
             UNKNOWN
         };
         Type type;
@@ -59,7 +60,11 @@ namespace CdbgExpr
         static CType UNION;
         static CType POINTER;
         static CType ARRAY;
+        static CType BITFIELD;
         static CType UNKNOWN;
+
+        char offset;
+        size_t size;
 
         bool operator==(const CType& right) const
         {
