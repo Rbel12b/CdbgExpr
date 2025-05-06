@@ -47,22 +47,6 @@ namespace CdbgExpr
         };
         Type type;
 
-        static CType VOID;
-        static CType INT;
-        static CType BOOL;
-        static CType CHAR;
-        static CType SHORT;
-        static CType LONG;
-        static CType LONGLONG;
-        static CType FLOAT;
-        static CType DOUBLE;
-        static CType STRUCT;
-        static CType UNION;
-        static CType POINTER;
-        static CType ARRAY;
-        static CType BITFIELD;
-        static CType UNKNOWN;
-
         char offset;
         size_t size;
 
@@ -72,6 +56,15 @@ namespace CdbgExpr
         bool operator==(const CType& right) const
         {
             if (right.type != type)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        bool operator==(const CType::Type& right) const
+        {
+            if (right != type)
             {
                 return false;
             }

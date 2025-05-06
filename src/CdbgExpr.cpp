@@ -288,7 +288,7 @@ namespace CdbgExpr
 
     SymbolDescriptor evalArrayAccess(const SymbolDescriptor &array, const SymbolDescriptor &index)
     {
-        if (array.cType[0] != CType::POINTER && array.cType[0] != CType::ARRAY)
+        if (array.cType[0] != CType::Type::POINTER && array.cType[0] != CType::Type::ARRAY)
         {
             throw std::runtime_error("Cannot index a non-array type");
         }
@@ -298,7 +298,7 @@ namespace CdbgExpr
 
     SymbolDescriptor evalMemberAccess(const SymbolDescriptor &structOrPointer, const std::string &member, bool isPointerAccess)
     {
-        if (isPointerAccess && structOrPointer.cType[0] != CType::POINTER)
+        if (isPointerAccess && structOrPointer.cType[0] != CType::Type::POINTER)
         {
             throw std::runtime_error("Expected a pointer for '->' operator");
         }

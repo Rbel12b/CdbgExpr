@@ -8,23 +8,6 @@
 
 namespace CdbgExpr
 {
-
-    CType CType::VOID{CType::Type::VOID};
-    CType CType::INT{CType::Type::INT};
-    CType CType::BOOL{CType::Type::BOOL};
-    CType CType::CHAR{CType::Type::CHAR};
-    CType CType::SHORT{CType::Type::SHORT};
-    CType CType::LONG{CType::Type::LONG};
-    CType CType::LONGLONG{CType::Type::LONGLONG};
-    CType CType::FLOAT{CType::Type::FLOAT};
-    CType CType::DOUBLE{CType::Type::DOUBLE};
-    CType CType::STRUCT{CType::Type::STRUCT};
-    CType CType::UNION{CType::Type::UNION};
-    CType CType::POINTER{CType::Type::POINTER};
-    CType CType::ARRAY{CType::Type::ARRAY};
-    CType CType::BITFIELD{CType::Type::BITFIELD};
-    CType CType::UNKNOWN{CType::Type::UNKNOWN};
-
     DbgData *SymbolDescriptor::data = nullptr;
     bool SymbolDescriptor::assignmentAllowed = false;
 
@@ -165,14 +148,14 @@ namespace CdbgExpr
 
     CType SymbolDescriptor::promoteType(const CType &left, const CType &right)
     {
-        if (left == CType::DOUBLE || left == CType::FLOAT ||
-            right == CType::DOUBLE || right == CType::FLOAT) 
+        if (left == CType::Type::DOUBLE || left == CType::Type::FLOAT ||
+            right == CType::Type::DOUBLE || right == CType::Type::FLOAT) 
         {
-            return CType::DOUBLE;
+            return CType::Type::DOUBLE;
         }
-        if (left == CType::POINTER || right == CType::POINTER)
+        if (left == CType::Type::POINTER || right == CType::Type::POINTER)
         {
-            return CType::POINTER;
+            return CType::Type::POINTER;
         }
         return (data->CTypeSize(left) > data->CTypeSize(right)) ? left : right;
     }
@@ -185,20 +168,20 @@ namespace CdbgExpr
 
         if (s.empty())
         {
-            cType.push_back(CType::INT);
+            cType.push_back(CType::Type::INT);
             value = (int64_t)0;
             return;
         }
         
         if (s == "true")
         {
-            cType.push_back(CType::BOOL);
+            cType.push_back(CType::Type::BOOL);
             value = (int64_t)1;
             return;
         }
         else if (s == "false")
         {
-            cType.push_back(CType::BOOL);
+            cType.push_back(CType::Type::BOOL);
             value = (int64_t)0;
             return;
         }
@@ -208,7 +191,7 @@ namespace CdbgExpr
             s.find('e') != std::string::npos || s.find('E') != std::string::npos)
         {
             double d = std::strtod(s.c_str(), &endptr);
-            cType.push_back(CType::DOUBLE);
+            cType.push_back(CType::Type::DOUBLE);
             value = d;
         }
         else
@@ -218,7 +201,7 @@ namespace CdbgExpr
                 isSigned = true;
             }
             uint64_t i = std::strtoull(s.c_str(), &endptr, 0);
-            cType.push_back(CType::LONGLONG);
+            cType.push_back(CType::Type::LONGLONG);
             if (isSigned)
             {
                 i = uint64_t(-(int64_t(i)));
@@ -226,7 +209,7 @@ namespace CdbgExpr
             value = i;
             return;
         }
-        cType.push_back(CType::INT);
+        cType.push_back(CType::Type::INT);
         value = (int64_t)0;
         return;
     }
@@ -234,14 +217,14 @@ namespace CdbgExpr
     void SymbolDescriptor::fromDouble(const double &val)
     {
         hasAddress = false;
-        cType.push_back(CType::DOUBLE);
+        cType.push_back(CType::Type::DOUBLE);
         value = val;
     }
 
     void SymbolDescriptor::fromInt(const int64_t &val)
     {
         hasAddress = false;
-        cType.push_back(CType::LONGLONG);
+        cType.push_back(CType::Type::LONGLONG);
         value = val;
         isSigned = true;
     }
@@ -249,13 +232,13 @@ namespace CdbgExpr
     void SymbolDescriptor::fromUint(const uint64_t &val)
     {
         hasAddress = false;
-        cType.push_back(CType::LONGLONG);
+        cType.push_back(CType::Type::LONGLONG);
         value = val;
     }
 
     SymbolDescriptor SymbolDescriptor::dereference(int offset) const
     {
-        if (cType.size() < 2 || (cType[0] != CType::POINTER && cType[0] != CType::ARRAY))
+        if (cType.size() < 2 || (cType[0] != CType::Type::POINTER && cType[0] != CType::Type::ARRAY))
         {
             throw std::runtime_error("Cannot dereference a non-pointer type");
         }
@@ -290,7 +273,7 @@ namespace CdbgExpr
         }
         SymbolDescriptor result;
         result.cType = cType;
-        result.cType.insert(result.cType.begin(), CType::POINTER);
+        result.cType.insert(result.cType.begin(), CType::Type::POINTER);
         result.value = addr;
         result.hasAddress = false;
         return result;
@@ -300,6 +283,10 @@ namespace CdbgExpr
     {
         if (hasAddress)
         {
+            if (cType.empty())
+            {
+                return;
+            }
             uint64_t newValue = value_to_uint64_b(val);
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
@@ -317,6 +304,10 @@ namespace CdbgExpr
         uint64_t val = 0;
         if (hasAddress)
         {
+            if (cType.empty())
+            {
+                return 0;
+            }
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
                 val |= data->getByte(value_to_uint64_b(value) + i) << (i * 8);
@@ -339,7 +330,7 @@ namespace CdbgExpr
 
         result << "(";
         uint64_t i = 0;
-        while (i < cType.size() && cType[i] == CType::POINTER)
+        while (i < cType.size() && cType[i] == CType::Type::POINTER)
         {
             result << "*";
             i++;
@@ -349,64 +340,64 @@ namespace CdbgExpr
             result << "<unknown type>";
             return result.str();
         }
-        if (!isSigned && cType[i] != CType::STRUCT && cType[i] != CType::BOOL &&
-            cType[i] != CType::FLOAT && cType[i] != CType::DOUBLE && cType[i] != CType::VOID)
+        if (!isSigned && cType[i] != CType::Type::STRUCT && cType[i] != CType::Type::BOOL &&
+            cType[i] != CType::Type::FLOAT && cType[i] != CType::Type::DOUBLE && cType[i] != CType::Type::VOID)
         {
             result << "unsigned";
         }
         for (; i < cType.size(); i++)
         {
             result << " ";
-            if (cType[i] == CType::POINTER)
+            if (cType[i] == CType::Type::POINTER)
             {
                 result << "*";
             }
-            else if (cType[i] == CType::VOID)
+            else if (cType[i] == CType::Type::VOID)
             {
                 result << "void";
             }
-            else if (cType[i] == CType::STRUCT)
+            else if (cType[i] == CType::Type::STRUCT)
             {
                 result << "struct";
             }
-            else if (cType[i] == CType::CHAR)
+            else if (cType[i] == CType::Type::CHAR)
             {
                 result << "char";
             }
-            else if (cType[i] == CType::BOOL)
+            else if (cType[i] == CType::Type::BOOL)
             {
                 result << "bool";
             }
-            else if (cType[i] == CType::SHORT)
+            else if (cType[i] == CType::Type::SHORT)
             {
                 result << "short";
             }
-            else if (cType[i] == CType::INT)
+            else if (cType[i] == CType::Type::INT)
             {
                 result << "int";
             }
-            else if (cType[i] == CType::LONG)
+            else if (cType[i] == CType::Type::LONG)
             {
                 result << "long";
             }
-            else if (cType[i] == CType::LONGLONG)
+            else if (cType[i] == CType::Type::LONGLONG)
             {
                 result << "long long";
             }
-            else if (cType[i] == CType::FLOAT)
+            else if (cType[i] == CType::Type::FLOAT)
             {
                 result << "float";
             }
-            else if (cType[i] == CType::DOUBLE)
+            else if (cType[i] == CType::Type::DOUBLE)
             {
                 result << "double";
             }
         }
         result << ") ";
 
-        if (cType.size() > 1 && cType[0] == CType::POINTER)
+        if (cType.size() > 1 && cType[0] == CType::Type::POINTER)
         {
-            if (cType[1] == CType::CHAR)
+            if (cType[1] == CType::Type::CHAR)
             {
                 if (!value_to_uint64_b(getValue()))
                 {
@@ -435,7 +426,7 @@ namespace CdbgExpr
 
         CType baseType = cType.back();
 
-        if (baseType == CType::STRUCT)
+        if (baseType == CType::Type::STRUCT)
         {
             result << "{ ";
             for (auto& member : members)
@@ -447,7 +438,7 @@ namespace CdbgExpr
             result << " }";
             return result.str();
         }
-        else if (baseType == CType::ARRAY)
+        else if (baseType == CType::Type::ARRAY)
         {
         }
         else
@@ -495,7 +486,14 @@ namespace CdbgExpr
         result.cType = cType;
         result.isSigned = (isSigned || right.isSigned);
         result.hasAddress = false;
-        result.cType[0] = promoteType(cType[0], right.cType[0]);
+        if (!cType.empty())
+        {
+            result.cType[0] = promoteType(cType[0], right.cType[0]);
+        }
+        else
+        {
+            result.cType.push_back(CType::Type::UNKNOWN);
+        }
         switch (result.cType[0].type)
         {
         case CType::Type::FLOAT:
@@ -528,7 +526,11 @@ namespace CdbgExpr
         result.isSigned = false;
         result.hasAddress = false;
         result.cType.clear();
-        result.cType.push_back(CType::BOOL);
+        result.cType.push_back(CType::Type::BOOL);
+        if (cType.empty())
+        {
+            return result;
+        }
         switch (cType[0].type)
         {
         case CType::Type::FLOAT:
@@ -551,7 +553,11 @@ namespace CdbgExpr
         result.isSigned = false;
         result.hasAddress = false;
         result.cType.clear();
-        result.cType.push_back(CType::BOOL);
+        result.cType.push_back(CType::Type::BOOL);
+        if (cType.empty())
+        {
+            return result;
+        }
         switch (cType[0].type)
         {
         case CType::Type::FLOAT:
@@ -572,7 +578,14 @@ namespace CdbgExpr
     {
         SymbolDescriptor result;
         result.cType = cType;
-        result.cType[0] = promoteType(cType[0], right.cType[0]);
+        if (!cType.empty())
+        {
+            result.cType[0] = promoteType(cType[0], right.cType[0]);
+        }
+        else
+        {
+            result.cType.push_back(CType::Type::UNKNOWN);
+        }
         result.isSigned = (isSigned || right.isSigned);
         result.hasAddress = false;
         result.value = op(toUnsigned(), right.toUnsigned());
@@ -608,7 +621,7 @@ namespace CdbgExpr
     SymbolDescriptor SymbolDescriptor::operator%(const SymbolDescriptor &right) const
     {
         SymbolDescriptor result;
-        result.cType.push_back(CType::INT);
+        result.cType.push_back(CType::Type::INT);
         result.isSigned = isSigned;
         result.value = getValue();
         result.value = result.toUnsigned() % right.toUnsigned();
