@@ -8,6 +8,22 @@
 
 namespace CdbgExpr
 {
+
+    CType CType::VOID{CType::Type::VOID};
+    CType CType::INT{CType::Type::INT};
+    CType CType::BOOL{CType::Type::BOOL};
+    CType CType::CHAR{CType::Type::CHAR};
+    CType CType::SHORT{CType::Type::SHORT};
+    CType CType::LONG{CType::Type::LONG};
+    CType CType::LONGLONG{CType::Type::LONGLONG};
+    CType CType::FLOAT{CType::Type::FLOAT};
+    CType CType::DOUBLE{CType::Type::DOUBLE};
+    CType CType::STRUCT{CType::Type::STRUCT};
+    CType CType::UNION{CType::Type::UNION};
+    CType CType::POINTER{CType::Type::POINTER};
+    CType CType::ARRAY{CType::Type::ARRAY};
+    CType CType::UNKNOWN{CType::Type::UNKNOWN};
+
     DbgData *SymbolDescriptor::data = nullptr;
     bool SymbolDescriptor::assignmentAllowed = false;
 
@@ -479,12 +495,12 @@ namespace CdbgExpr
         result.isSigned = (isSigned || right.isSigned);
         result.hasAddress = false;
         result.cType[0] = promoteType(cType[0], right.cType[0]);
-        switch (result.cType[0])
+        switch (result.cType[0].type)
         {
-        case CType::FLOAT:
+        case CType::Type::FLOAT:
             result.value = static_cast<double>(op(toFloat(), right.toFloat()));
             break;
-        case CType::DOUBLE:
+        case CType::Type::DOUBLE:
             result.value = static_cast<double>(op(toDouble(), right.toDouble()));
             break;
         default:
@@ -512,12 +528,12 @@ namespace CdbgExpr
         result.hasAddress = false;
         result.cType.clear();
         result.cType.push_back(CType::BOOL);
-        switch (cType[0])
+        switch (cType[0].type)
         {
-        case CType::FLOAT:
+        case CType::Type::FLOAT:
             result.value = static_cast<uint64_t>(op(toFloat(), right.toFloat()));
             break;
-        case CType::DOUBLE:
+        case CType::Type::DOUBLE:
             result.value = static_cast<uint64_t>(op(toDouble(), right.toDouble()));
             break;
         default:
@@ -535,12 +551,12 @@ namespace CdbgExpr
         result.hasAddress = false;
         result.cType.clear();
         result.cType.push_back(CType::BOOL);
-        switch (cType[0])
+        switch (cType[0].type)
         {
-        case CType::FLOAT:
+        case CType::Type::FLOAT:
             result.value = static_cast<uint64_t>(op(toFloat(), right.toFloat()));
             break;
-        case CType::DOUBLE:
+        case CType::Type::DOUBLE:
             result.value = static_cast<uint64_t>(op(toDouble(), right.toDouble()));
             break;
         default:

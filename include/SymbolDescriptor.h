@@ -24,22 +24,51 @@ namespace CdbgExpr
         std::string name;
     };
 
-    enum class CType
+    class CType
     {
-        VOID,
-        INT,
-        BOOL,
-        CHAR,
-        SHORT,
-        LONG,
-        LONGLONG,
-        FLOAT,
-        DOUBLE,
-        STRUCT,
-        UNION,
-        POINTER,
-        ARRAY,
-        UNKNOWN
+    public:
+        enum class Type
+        {
+            VOID,
+            INT,
+            BOOL,
+            CHAR,
+            SHORT,
+            LONG,
+            LONGLONG,
+            FLOAT,
+            DOUBLE,
+            STRUCT,
+            UNION,
+            POINTER,
+            ARRAY,
+            UNKNOWN
+        };
+        Type type;
+
+        static CType VOID;
+        static CType INT;
+        static CType BOOL;
+        static CType CHAR;
+        static CType SHORT;
+        static CType LONG;
+        static CType LONGLONG;
+        static CType FLOAT;
+        static CType DOUBLE;
+        static CType STRUCT;
+        static CType UNION;
+        static CType POINTER;
+        static CType ARRAY;
+        static CType UNKNOWN;
+
+        bool operator==(const CType& right) const
+        {
+            if (right.type != type)
+            {
+                return false;
+            }
+            return true;
+        }
     };
 
     class SymbolDescriptor;
