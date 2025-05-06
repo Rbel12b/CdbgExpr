@@ -66,6 +66,9 @@ namespace CdbgExpr
         char offset;
         size_t size;
 
+        CType() : type(Type::UNKNOWN) {}
+        CType(CType::Type _type) : type(_type) {}
+
         bool operator==(const CType& right) const
         {
             if (right.type != type)
