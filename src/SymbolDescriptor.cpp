@@ -322,17 +322,28 @@ namespace CdbgExpr
             throw std::runtime_error("DbgData pointer is null");
         }
         uint64_t val = 0;
-        if (hasAddress)
+        if (regs.size())
+        {
+            for (size_t i = 0; i < regs.size() && i < 8; i++)
+            {
+                val |= data->getRegContent(regs[i]) << (i * 8);
+            }
+        }
+        else if (hasAddress || stack)
         {
             if (cType.empty())
             {
-                return 0;
+                return val;
+            }
+            uint64_t addr = value_to_uint64_b(value);
+            if (stack)
+            {
+                addr = data->getStackPointer() + stackOffs;
             }
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
-                val |= data->getByte(value_to_uint64_b(value) + i) << (i * 8);
+                val |= data->getByte(addr + i) << (i * 8);
             }
-            return val;
         }
         else
         {
