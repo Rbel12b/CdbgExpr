@@ -81,7 +81,9 @@ namespace CdbgExpr
         virtual uint8_t getByte(uint64_t) = 0;
         virtual void setByte(uint64_t, uint8_t) = 0;
         virtual uint8_t CTypeSize(CType) = 0;
-        uint64_t invalidAddress = 0;
+        virtual uint64_t getStackPointer() = 0;
+        virtual uint64_t getRegContent(uint8_t regNum) = 0;
+        uint64_t invalidAddress = 0; // non-valid memory address (eg. nullptr/0)
     };
 
     class Member;
@@ -98,6 +100,11 @@ namespace CdbgExpr
         uint64_t size = 0;
         bool isSigned = false;
         std::unordered_map<std::string, Member> members;
+
+        bool stack;
+        int stackOffs;
+
+        std::vector<uint8_t> regs;
 
         // C type information.
         std::vector<CType> cType;
