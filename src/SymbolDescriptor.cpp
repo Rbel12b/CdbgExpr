@@ -148,6 +148,10 @@ namespace CdbgExpr
 
     CType SymbolDescriptor::promoteType(const CType &left, const CType &right)
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         if (left == CType::Type::DOUBLE || left == CType::Type::FLOAT ||
             right == CType::Type::DOUBLE || right == CType::Type::FLOAT) 
         {
@@ -238,6 +242,10 @@ namespace CdbgExpr
 
     SymbolDescriptor SymbolDescriptor::dereference(int offset) const
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         if (cType.size() < 2 || (cType[0] != CType::Type::POINTER && cType[0] != CType::Type::ARRAY))
         {
             throw std::runtime_error("Cannot dereference a non-pointer type");
@@ -262,6 +270,10 @@ namespace CdbgExpr
 
     SymbolDescriptor SymbolDescriptor::addressOf() const
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         uint64_t addr;
         if (!hasAddress)
         {
@@ -281,6 +293,10 @@ namespace CdbgExpr
 
     void SymbolDescriptor::setValue(const std::variant<uint64_t, int64_t, double, float>& val)
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         if (hasAddress)
         {
             if (cType.empty())
@@ -301,6 +317,10 @@ namespace CdbgExpr
 
     std::variant<uint64_t, int64_t, double, float> SymbolDescriptor::getValue() const
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         uint64_t val = 0;
         if (hasAddress)
         {
@@ -323,6 +343,10 @@ namespace CdbgExpr
 
     std::string SymbolDescriptor::toString() const
     {
+        if (data == nullptr)
+        {
+            throw std::runtime_error("DbgData pointer is null");
+        }
         if (cType.empty())
             return "<unknown type>";
 
