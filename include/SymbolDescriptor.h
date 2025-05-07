@@ -82,7 +82,8 @@ namespace CdbgExpr
         virtual void setByte(uint64_t, uint8_t) = 0;
         virtual uint8_t CTypeSize(CType) = 0;
         virtual uint64_t getStackPointer() = 0;
-        virtual uint64_t getRegContent(uint8_t regNum) = 0;
+        virtual uint8_t getRegContent(uint8_t regNum) = 0;
+        virtual void setRegContent(uint8_t regNum, uint8_t val) = 0;
         uint64_t invalidAddress = 0; // non-valid memory address (eg. nullptr/0)
     };
 

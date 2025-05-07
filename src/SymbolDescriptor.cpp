@@ -297,21 +297,33 @@ namespace CdbgExpr
         {
             throw std::runtime_error("DbgData pointer is null");
         }
-        if (hasAddress)
+        uint64_t newValue = value_to_uint64_b(val);
+        if (regs.size())
+        {
+            for (size_t i = 0; i < regs.size() && i < 8; i++)
+            {
+                data->setRegContent(regs[i], ((newValue >> (i * 8)) & 0xFF));
+            }
+        }
+        if (hasAddress ||stack)
         {
             if (cType.empty())
             {
                 return;
             }
-            uint64_t newValue = value_to_uint64_b(val);
+            uint64_t addr = value_to_uint64_b(value);
+            if (stack)
+            {
+                addr = data->getStackPointer() + stackOffs;
+            }
             for (int i = 0; i < data->CTypeSize(cType[0]); i++)
             {
-                data->setByte(value_to_uint64_b(value) + i, ((newValue >> (i * 8)) & 0xFF));
+                data->setByte(addr + i, ((newValue >> (i * 8)) & 0xFF));
             }
         }
         else
         {
-            value = val;
+            value = newValue;
         }
     }
 
