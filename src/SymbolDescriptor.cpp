@@ -439,7 +439,7 @@ namespace CdbgExpr
         uint64_t newValue = value_to_uint64_b(val);
         if (regs.size())
         {
-            for (size_t i = 0; i < regs.size() && i < 8; i++)
+            for (uint64_t i = 0; i < regs.size() && i < 8; i++)
             {
                 data->setRegContent(regs[i], ((newValue >> (i * 8)) & 0xFF));
             }
@@ -455,7 +455,7 @@ namespace CdbgExpr
             {
                 addr = data->getStackPointer() + stackOffs;
             }
-            for (int i = 0; i < data->CTypeSize(cType[0]); i++)
+            for (uint64_t i = 0; i < data->CTypeSize(cType[0]); i++)
             {
                 data->setByte(addr + i, ((newValue >> (i * 8)) & 0xFF));
             }
@@ -475,9 +475,9 @@ namespace CdbgExpr
         uint64_t val = 0;
         if (regs.size())
         {
-            for (size_t i = 0; i < regs.size() && i < 8; i++)
+            for (uint64_t i = 0; i < regs.size() && i < 8; i++)
             {
-                val |= data->getRegContent(regs[i]) << (i * 8);
+                val |= (uint64_t)data->getRegContent(regs[i]) << (i * 8);
             }
         }
         else if (hasAddress || stack)
@@ -491,9 +491,9 @@ namespace CdbgExpr
             {
                 addr = data->getStackPointer() + stackOffs;
             }
-            for (int i = 0; i < data->CTypeSize(cType[0]); i++)
+            for (uint64_t i = 0; i < data->CTypeSize(cType[0]); i++)
             {
-                val |= data->getByte(addr + i) << (i * 8);
+                val |= (uint64_t)data->getByte(addr + i) << (i * 8);
             }
         }
         else
@@ -518,7 +518,6 @@ namespace CdbgExpr
         uint64_t i = 0;
         while (i < cType.size() && cType[i] == CType::Type::POINTER)
         {
-            result << "*";
             i++;
         }
         if (i >= cType.size())
@@ -585,6 +584,13 @@ namespace CdbgExpr
             {
                 result << "double";
             }
+        }
+
+        i = 0;
+        while (i < cType.size() && cType[i] == CType::Type::POINTER)
+        {
+            result << "*";
+            i++;
         }
         result << ") ";
 
