@@ -72,47 +72,78 @@ namespace CdbgExpr
             }
 
             // --- FLOATING POINT OR INTEGER NUMBERS ---
-            if (std::isdigit(c) || (c == '.' && i + 1 < expr.size() && std::isdigit(expr[i + 1])))
+            if (std::isdigit(c) || (c == '.' && i + 1 < expr.size() && std::isdigit(expr[i + 1])) || 
+                (c == '0' && i + 1 < expr.size() && (expr[i + 1] == 'x' || expr[i + 1] == 'X' || expr[i + 1] == 'b' || expr[i + 1] == 'B')))
             {
                 token.clear();
-                bool hasDot = false;
-                bool hasExp = false;
-                while (i < expr.size())
+                size_t start = i;
+
+                if (expr[i] == '0' && i + 1 < expr.size() && (expr[i + 1] == 'x' || expr[i + 1] == 'X'))
                 {
-                    char ch = expr[i];
-                    if (std::isdigit(ch))
+                    // Hex literal: 0x...
+                    token += expr[i++];
+                    token += expr[i++];
+                    while (i < expr.size() && std::isxdigit(expr[i]))
                     {
-                        token += ch;
-                        i++;
+                        token += expr[i++];
                     }
-                    else if (ch == '.' && !hasDot)
+                }
+                else if (expr[i] == '0' && i + 1 < expr.size() && (expr[i + 1] == 'b' || expr[i + 1] == 'B'))
+                {
+                    // Binary literal: 0b...
+                    token += expr[i++];
+                    token += expr[i++];
+                    while (i < expr.size() && (expr[i] == '0' || expr[i] == '1'))
                     {
-                        hasDot = true;
-                        token += ch;
-                        i++;
+                        token += expr[i++];
                     }
-                    else if ((ch == 'e' || ch == 'E') && !hasExp)
+                }
+                else
+                {
+                    // Decimal or floating point
+                    bool hasDot = false;
+                    bool hasExp = false;
+                    while (i < expr.size())
                     {
-                        hasExp = true;
-                        token += ch;
-                        i++;
-                        if (i < expr.size() && (expr[i] == '+' || expr[i] == '-'))
+                        char ch = expr[i];
+                        if (std::isdigit(ch))
                         {
-                            token += expr[i];
+                            token += ch;
                             i++;
                         }
+                        else if (ch == '.' && !hasDot)
+                        {
+                            hasDot = true;
+                            token += ch;
+                            i++;
+                        }
+                        else if ((ch == 'e' || ch == 'E') && !hasExp)
+                        {
+                            hasExp = true;
+                            token += ch;
+                            i++;
+                            if (i < expr.size() && (expr[i] == '+' || expr[i] == '-'))
+                            {
+                                token += expr[i++];
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
-                    else
+
+                    // Optional float suffix (f/F, l/L)
+                    if (i < expr.size() && (expr[i] == 'f' || expr[i] == 'F' || expr[i] == 'l' || expr[i] == 'L'))
                     {
-                        break;
+                        token += expr[i++];
                     }
                 }
 
-                // Optional float suffix (e.g. 1.0f)
-                if (i < expr.size() && (expr[i] == 'f' || expr[i] == 'F'))
+                // Optional integer suffix (u/U, l/L, ul/UL, etc.)
+                while (i < expr.size() && (expr[i] == 'u' || expr[i] == 'U' || expr[i] == 'l' || expr[i] == 'L'))
                 {
-                    token += expr[i];
-                    i++;
+                    token += expr[i++];
                 }
 
                 rawTokens.push_back(token);

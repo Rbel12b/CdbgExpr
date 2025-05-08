@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include "SymbolDescriptor.h"
+#include <regex>
 
 namespace CdbgExpr
 {
@@ -163,20 +164,22 @@ namespace CdbgExpr
         }
         return (data->CTypeSize(left) > data->CTypeSize(right)) ? left : right;
     }
-
+    
     void SymbolDescriptor::fromString(const std::string &str)
     {
         std::string s = str;
         cType.clear();
         hasAddress = false;
-
+        isSigned = false;
+    
         if (s.empty())
         {
             cType.push_back(CType::Type::INT);
             value = (int64_t)0;
             return;
         }
-        
+    
+        // Handle boolean literals
         if (s == "true")
         {
             cType.push_back(CType::Type::BOOL);
@@ -189,34 +192,97 @@ namespace CdbgExpr
             value = (int64_t)0;
             return;
         }
-
-        char* endptr;
-        if (s.find('.') != std::string::npos ||
-            s.find('e') != std::string::npos || s.find('E') != std::string::npos)
+    
+        // Handle integer suffixes (u, l, ul, ull, etc)
+        std::regex intRegex(R"(^[-+]?0[xX][0-9a-fA-F]+([uU]?[lL]{0,2}|[lL]{1,2}[uU]?)?$|^[-+]?0[bB][01]+([uU]?[lL]{0,2}|[lL]{1,2}[uU]?)?$|^[-+]?[0-9]+([uU]?[lL]{0,2}|[lL]{1,2}[uU]?)?$)");
+        if (std::regex_match(s, intRegex))
         {
-            double d = std::strtod(s.c_str(), &endptr);
-            cType.push_back(CType::Type::DOUBLE);
-            value = d;
-        }
-        else
-        {
-            if (s[0] == '-')
+            // Strip suffixes
+            std::string digits = s;
+            std::string suffix;
+    
+            // Find where suffix starts
+            size_t suffixStart = s.find_last_of("0123456789xXbBabcdefABCDEF");
+            if (suffixStart != std::string::npos && suffixStart + 1 < s.size())
             {
+                suffix = s.substr(suffixStart + 1);
+                digits = s.substr(0, suffixStart + 1);
+            }
+    
+            // Determine base
+            int base = 10;
+            if (digits.find("0x") == 0 || digits.find("0X") == 0) base = 16;
+            else if (digits.find("0b") == 0 || digits.find("0B") == 0) {
+                base = 2;
+                // strtoull doesn't support binary, so manual parsing
+                uint64_t bin = 0;
+                size_t i = (digits[0] == '-') ? 3 : 2; // skip "0b" or "-0b"
+                for (; i < digits.size(); ++i) {
+                    if (digits[i] != '0' && digits[i] != '1')
+                        throw std::runtime_error("Invalid binary literal: " + s);
+                    bin = (bin << 1) | (digits[i] - '0');
+                }
+                if (digits[0] == '-') {
+                    isSigned = true;
+                    bin = uint64_t(-(int64_t(bin)));
+                }
+                cType.push_back(CType::Type::LONGLONG); // customize if needed
+                value = bin;
+                return;
+            } else if (digits[0] == '0' && digits.size() > 1 && digits[1] != 'x' && digits[1] != 'X') base = 8;
+    
+            // Parse the number
+            char* endptr = nullptr;
+            uint64_t parsed = std::strtoull(digits.c_str(), &endptr, base);
+    
+            // Determine signedness and size
+            std::string lowered;
+            for (char ch : suffix)
+                lowered += std::tolower(ch);
+    
+            if (lowered.find('u') != std::string::npos)
+                isSigned = false;
+            else
                 isSigned = true;
-            }
-            uint64_t i = std::strtoull(s.c_str(), &endptr, 0);
-            cType.push_back(CType::Type::LONGLONG);
+    
+            if (lowered.find("ll") != std::string::npos)
+                cType.push_back(CType::Type::LONGLONG);
+            else if (lowered.find('l') != std::string::npos)
+                cType.push_back(CType::Type::LONG);
+            else
+                cType.push_back(CType::Type::INT);
+    
             if (isSigned)
-            {
-                i = uint64_t(-(int64_t(i)));
-            }
-            value = i;
+                value = int64_t(parsed);
+            else
+                value = parsed;
+    
             return;
         }
+    
+        // Handle float literals with suffixes (f, l, etc)
+        std::regex floatRegex(R"(^[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?[fFlL]?$)");
+        if (std::regex_match(s, floatRegex))
+        {
+            char* endptr;
+            double d = std::strtod(s.c_str(), &endptr);
+            if (endptr && (*endptr == 'f' || *endptr == 'F'))
+            {
+                cType.push_back(CType::Type::FLOAT);
+                value = static_cast<float>(d);
+            }
+            else
+            {
+                cType.push_back(CType::Type::DOUBLE);
+                value = d;
+            }
+            return;
+        }
+    
+        // Fallback: treat as INT 0
         cType.push_back(CType::Type::INT);
-        value = (int64_t)0;
-        return;
-    }
+        value = int64_t(0);
+    }    
 
     void SymbolDescriptor::fromDouble(const double &val)
     {
