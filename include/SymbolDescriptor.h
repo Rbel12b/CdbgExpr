@@ -47,8 +47,8 @@ namespace CdbgExpr
         };
         Type type;
 
-        char offset;
-        size_t size;
+        char offset = 0;
+        size_t size = 0;
         std::string name;
 
         CType() : type(Type::UNKNOWN) {}
@@ -150,7 +150,8 @@ namespace CdbgExpr
         void setValue(const std::variant<uint64_t, int64_t, double, float>& val);
         std::variant<uint64_t, int64_t, double, float> getValue() const;
 
-        std::string toString() const;
+        std::string toString(uint8_t level = 0) const;
+        std::string arrayToString(const std::vector<CType>& cType, uint8_t level) const;
 
         SymbolDescriptor assign(const SymbolDescriptor &right);
 

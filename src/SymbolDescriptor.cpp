@@ -503,20 +503,20 @@ namespace CdbgExpr
         return val;
     }
 
-    std::string SymbolDescriptor::toString() const
+    std::string SymbolDescriptor::toString(uint8_t level) const
     {
         if (data == nullptr)
         {
             throw std::runtime_error("DbgData pointer is null");
         }
-        if (cType.empty())
+        if (cType.size() <= level)
             return "<unknown type>";
 
         std::ostringstream result;
 
         result << "(";
-        uint64_t i = 0;
-        while (i < cType.size() && cType[i] == CType::Type::POINTER)
+        uint64_t i = level;
+        while (i < cType.size() && (cType[i] == CType::Type::POINTER || cType[i] == CType::Type::ARRAY))
         {
             i++;
         }
@@ -586,8 +586,8 @@ namespace CdbgExpr
             }
         }
 
-        i = 0;
-        while (i < cType.size() && cType[i] == CType::Type::POINTER)
+        i = level;
+        while (i < cType.size() && (cType[i] == CType::Type::POINTER || cType[i] == CType::Type::ARRAY))
         {
             result << "*";
             i++;
@@ -623,6 +623,12 @@ namespace CdbgExpr
             }
         }
 
+        if (cType[level] == CType::Type::ARRAY)
+        {
+            result << arrayToString(cType, level);
+            return result.str();
+        }
+
         CType baseType = cType.back();
 
         if (baseType == CType::Type::STRUCT)
@@ -637,15 +643,39 @@ namespace CdbgExpr
             result << " }";
             return result.str();
         }
-        else if (baseType == CType::Type::ARRAY)
-        {
-        }
         else
         {
             return result.str() + std::visit([](auto && value) { return std::to_string(value); }, getValue());
         }
 
         return result.str() + "<unsupported type>";
+    }
+
+    std::string SymbolDescriptor::arrayToString(const std::vector<CType> &cType, uint8_t level) const
+    {
+        std::string result;
+        if ((size_t)(level + 1) >= cType.size())
+        {
+            return result;
+        }
+        result += "[ ";
+        for (size_t i = 0; i < cType[level].size; i++)
+        {
+            if (cType[level + 1] == CType::Type::ARRAY)
+            {
+                result += arrayToString(cType, level + 1);
+            }
+            else
+            {
+                result += toString(level + 1);
+            }
+            if (i != cType[level].size - 1)
+            {
+                result += ", ";
+            }
+        }
+        result += " ]";
+        return result;
     }
 
     SymbolDescriptor SymbolDescriptor::assign(const SymbolDescriptor &right)
