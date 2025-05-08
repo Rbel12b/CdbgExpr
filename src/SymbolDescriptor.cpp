@@ -456,16 +456,23 @@ namespace CdbgExpr
         if (!isSigned && cType[i] != CType::Type::STRUCT && cType[i] != CType::Type::BOOL &&
             cType[i] != CType::Type::FLOAT && cType[i] != CType::Type::DOUBLE && cType[i] != CType::Type::VOID)
         {
-            result << "unsigned";
+            result << "unsigned ";
         }
+        size_t start = i;
         for (; i < cType.size(); i++)
         {
-            result << " ";
             if (cType[i] == CType::Type::POINTER)
             {
                 result << "*";
+                continue;
             }
-            else if (cType[i] == CType::Type::VOID)
+
+            if (i != start)
+            {
+                result << " ";
+            }
+            
+            if (cType[i] == CType::Type::VOID)
             {
                 result << "void";
             }
