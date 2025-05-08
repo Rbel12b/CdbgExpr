@@ -589,14 +589,21 @@ namespace CdbgExpr
         i = level;
         while (i < cType.size() && (cType[i] == CType::Type::POINTER || cType[i] == CType::Type::ARRAY))
         {
-            result << "*";
+            if (cType[i] == CType::Type::ARRAY)
+            {
+                result << "[" << cType[i].size << "]";
+            }
+            else
+            {
+                result << "*";
+            }
             i++;
         }
         result << ") ";
 
-        if (cType.size() > 1 && cType[0] == CType::Type::POINTER)
+        if (cType.size() > (size_t)(level + 1) && cType[level] == CType::Type::POINTER)
         {
-            if (cType[1] == CType::Type::CHAR)
+            if (cType[level + 1] == CType::Type::CHAR)
             {
                 if (!value_to_uint64_b(getValue()))
                 {
@@ -633,14 +640,15 @@ namespace CdbgExpr
 
         if (baseType == CType::Type::STRUCT)
         {
-            result << "{ ";
+            result << baseType.name;
+            result << "{";
             for (auto& member : members)
             {
                 result << member.first << " = ";
                 result << member.second.symbol.toString();
                 result << ", ";
             }
-            result << " }";
+            result << "}";
             return result.str();
         }
         else
@@ -658,7 +666,7 @@ namespace CdbgExpr
         {
             return result;
         }
-        result += "[ ";
+        result += "[";
         for (size_t i = 0; i < cType[level].size; i++)
         {
             if (cType[level + 1] == CType::Type::ARRAY)
@@ -674,7 +682,7 @@ namespace CdbgExpr
                 result += ", ";
             }
         }
-        result += " ]";
+        result += "]";
         return result;
     }
 
