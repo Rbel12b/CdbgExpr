@@ -105,8 +105,8 @@ namespace CdbgExpr
         bool isSigned = false;
         std::unordered_map<std::string, Member> members;
 
-        bool stack;
-        int stackOffs;
+        bool stack = false;
+        int stackOffs = 0;
 
         std::vector<uint8_t> regs;
 
