@@ -533,7 +533,7 @@ namespace CdbgExpr
         result.cType = cType;
         result.isSigned = (isSigned || right.isSigned);
         result.hasAddress = false;
-        if (!cType.empty())
+        if (!cType.empty() && !right.cType.empty())
         {
             result.cType[0] = promoteType(cType[0], right.cType[0]);
         }
@@ -625,7 +625,7 @@ namespace CdbgExpr
     {
         SymbolDescriptor result;
         result.cType = cType;
-        if (!cType.empty())
+        if (!cType.empty() && !right.cType.empty())
         {
             result.cType[0] = promoteType(cType[0], right.cType[0]);
         }

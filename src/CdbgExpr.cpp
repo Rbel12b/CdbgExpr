@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <set>
 
 namespace CdbgExpr
 {
@@ -26,28 +27,99 @@ namespace CdbgExpr
 
     void Expression::tokenize(const std::string &expr)
     {
+        std::vector<std::string> rawTokens;
         std::string token;
-        Token currentToken;
         uint64_t i = 0;
+
+        static const std::set<std::string> multiCharOperators = {
+            "==", "!=", "<=", ">=", "&&", "||", "->", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>"
+        };
+
+        // First Pass: Raw token extraction
         while (i < expr.size())
         {
             char c = expr[i];
+
             if (std::isspace(c))
             {
                 i++;
                 continue;
             }
-            if (std::isdigit(c))
+
+            // --- STRING LITERALS ---
+            if (c == '"' || c == '\'')
+            {
+                char quote = c;
+                token.clear();
+                token += quote;
+                i++;
+                while (i < expr.size())
+                {
+                    char ch = expr[i];
+                    token += ch;
+                    i++;
+                    if (ch == '\\' && i < expr.size())  // Escape character
+                    {
+                        token += expr[i];
+                        i++;
+                        continue;
+                    }
+                    if (ch == quote)
+                        break;
+                }
+                rawTokens.push_back(token);
+                continue;
+            }
+
+            // --- FLOATING POINT OR INTEGER NUMBERS ---
+            if (std::isdigit(c) || (c == '.' && i + 1 < expr.size() && std::isdigit(expr[i + 1])))
             {
                 token.clear();
-                while (i < expr.size() && std::isdigit(expr[i]))
+                bool hasDot = false;
+                bool hasExp = false;
+                while (i < expr.size())
+                {
+                    char ch = expr[i];
+                    if (std::isdigit(ch))
+                    {
+                        token += ch;
+                        i++;
+                    }
+                    else if (ch == '.' && !hasDot)
+                    {
+                        hasDot = true;
+                        token += ch;
+                        i++;
+                    }
+                    else if ((ch == 'e' || ch == 'E') && !hasExp)
+                    {
+                        hasExp = true;
+                        token += ch;
+                        i++;
+                        if (i < expr.size() && (expr[i] == '+' || expr[i] == '-'))
+                        {
+                            token += expr[i];
+                            i++;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Optional float suffix (e.g. 1.0f)
+                if (i < expr.size() && (expr[i] == 'f' || expr[i] == 'F'))
                 {
                     token += expr[i];
                     i++;
                 }
-                tokens.push_back({TokenType::NUMBER, token});
+
+                rawTokens.push_back(token);
                 continue;
             }
+
+            // --- SYMBOLS (identifiers) ---
             if (std::isalpha(c) || c == '_')
             {
                 token.clear();
@@ -56,79 +128,128 @@ namespace CdbgExpr
                     token += expr[i];
                     i++;
                 }
-                tokens.push_back({TokenType::SYMBOL, token});
+                rawTokens.push_back(token);
                 continue;
             }
-            if (c == '(' || c == ')')
+
+            // --- MULTI-CHARACTER OPERATORS ---
+            bool matched = false;
+            for (int len = 3; len >= 2; --len)
             {
-                tokens.push_back({TokenType::PARENTHESIS, std::string(1, c)});
-                i++;
-                continue;
-            }
-            if (c == '[' || c == ']')
-            {
-                tokens.push_back({TokenType::ARRAY_ACCESS, std::string(1, c)});
-                i++;
-                continue;
-            }
-            if (c == '.' || (c == '-' && i + 1 < expr.size() && expr[i + 1] == '>'))
-            {
-                if (c == '-')
-                    i++;
-                tokens.push_back({TokenType::STRUCT_ACCESS, std::string(1, c)});
-                i++;
-                continue;
-            }
-            if (c == '+' || c == '-' || c == '*' || c == '&' || c == '=')
-            {
-                if (tokens.empty() || (tokens.back().type != TokenType::SYMBOL && tokens.back().type != TokenType::NUMBER))
+                if (i + len <= expr.size())
                 {
-                    tokens.push_back({TokenType::UNARY_OPERATOR, std::string(1, c)});
+                    std::string op = expr.substr(i, len);
+                    if (multiCharOperators.count(op))
+                    {
+                        rawTokens.push_back(op);
+                        i += len;
+                        matched = true;
+                        break;
+                    }
                 }
+            }
+            if (matched) continue;
+
+            // --- SINGLE CHARACTER TOKEN ---
+            rawTokens.push_back(std::string(1, expr[i]));
+            i++;
+        }
+
+        // Second Pass: Type assignment
+        for (size_t j = 0; j < rawTokens.size(); ++j)
+        {
+            const std::string &tok = rawTokens[j];
+            TokenType type;
+
+            if (tok == "(" || tok == ")")
+            {
+                type = TokenType::PARENTHESIS;
+            }
+            else if (tok == "[" || tok == "]")
+            {
+                type = TokenType::ARRAY_ACCESS;
+            }
+            else if (tok == "." || tok == "->")
+            {
+                type = TokenType::STRUCT_ACCESS;
+            }
+            else if ((tok.front() == '"' && tok.back() == '"') || (tok.front() == '\'' && tok.back() == '\''))
+            {
+                type = TokenType::STRING_LITERAL;
+            }
+            else if (std::isdigit(tok[0]) || tok[0] == '.')
+            {
+                type = TokenType::NUMBER;
+            }
+            else if (std::isalpha(tok[0]) || tok[0] == '_')
+            {
+                type = TokenType::SYMBOL;
+            }
+            else if (tok == "+" || tok == "-" || tok == "*" || tok == "&" || tok == "=")
+            {
+                if (tokens.empty() || (tokens.back().type != TokenType::SYMBOL &&
+                                    tokens.back().type != TokenType::NUMBER &&
+                                    tokens.back().type != TokenType::PARENTHESIS &&
+                                    tokens.back().value != ")"))
+                    type = TokenType::UNARY_OPERATOR;
                 else
-                {
-                    tokens.push_back({TokenType::OPERATOR, std::string(1, c)});
-                }
-                i++;
-                continue;
+                    type = TokenType::OPERATOR;
             }
-            token.clear();
-            while (i < expr.size() && std::ispunct(expr[i]) && expr[i] != '(' && expr[i] != ')' && expr[i] != '[' && expr[i] != ']')
+            else
             {
-                token += expr[i];
-                i++;
+                type = TokenType::OPERATOR;
             }
-            tokens.push_back({TokenType::OPERATOR, token});
+
+            tokens.push_back({type, tok});
         }
     }
 
     int getPrecedence(const Token &token)
     {
-        const std::unordered_map<std::string, int> precedence = {
-            {"[]", 17}, {"++", 15}, {"--", 15}, {"*", 14}, {"/", 14}, {"%", 14},
-            {"+", 13}, {"-", 13}, {"<<", 12}, {">>", 12}, {"<", 11}, {">", 11}, {"<=", 11}, {">=", 11},
-            {"==", 10}, {"!=", 10}, {"&", 9}, {"^", 8}, {"|", 7}, {"&&", 6}, {"||", 5}, {"?", 4}, {":", 4},
-            {"=", 3}, {"+=", 3}, {"-=", 3}, {"*=", 3}, {"/=", 3}, {"%=", 3}, {"<<=", 3}, {">>=", 3},
-            {"&=", 3}, {"^=", 3}, {"|=", 3}, {",", 2},
+        static const std::unordered_map<std::string, int> precedence = {
+            {"[]", 18}, {".", 18}, {"->", 18},                    // member access
+            {"++", 17}, {"--", 17},                               // postfix
+            {"*", 15}, {"/", 15}, {"%", 15},                      // multiplicative
+            {"+", 14}, {"-", 14},                                 // additive
+            {"<<", 13}, {">>", 13},                               // shift
+            {"<", 12}, {"<=", 12}, {">", 12}, {">=", 12},         // relational
+            {"==", 11}, {"!=", 11},                               // equality
+            {"&", 10},
+            {"^", 9},
+            {"|", 8},
+            {"&&", 7},
+            {"||", 6},
+            {"?", 5}, {":", 5},
+            {"=", 4}, {"+=", 4}, {"-=", 4}, {"*=", 4}, {"/=", 4},
+            {"%=", 4}, {"<<=", 4}, {">>=", 4}, {"&=", 4}, {"^=", 4}, {"|=", 4},
+            {",", 3}
         };
 
         if (token.type == TokenType::PARENTHESIS)
         {
-            return 0;
+            return -1; // used structurally, not as operators
         }
         else if (token.type == TokenType::STRUCT_ACCESS)
-        {    
+        {
             return 18;
         }
         else if (token.type == TokenType::UNARY_OPERATOR)
-        {    
-            return 16;
+        {
+            return 16; // for unary + - * & ! ~
         }
         else if (precedence.contains(token.value))
         {
             return precedence.at(token.value);
         }
-        return 0;
+        return 0; // unknown or non-operator
+    }
+
+    bool isRightAssociative(const Token &token)
+    {
+        static const std::set<std::string> rightAssoc = {
+            "=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "^=", "|=", "?", ":"
+        };
+        return rightAssoc.count(token.value) > 0 || token.type == TokenType::UNARY_OPERATOR;
     }
 
     SymbolDescriptor evalUnaryOperator(const SymbolDescriptor &operand, const std::string &op)
@@ -403,7 +524,9 @@ namespace CdbgExpr
         {
             Token opToken = tokens[index++];
             int precedence = getPrecedence(opToken);
-            auto rhs = parseExpression(precedence + 1);
+            bool rightAssoc = isRightAssociative(opToken);
+
+            auto rhs = parseExpression(precedence + (rightAssoc ? 0 : 1));
             lhs = std::make_unique<BinaryOpNode>(opToken.value, std::move(lhs), std::move(rhs));
         }
 

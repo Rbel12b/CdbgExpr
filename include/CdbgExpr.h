@@ -22,6 +22,7 @@ namespace CdbgExpr
         STRUCT_ACCESS,
         ASSIGNMENT,
         FUNCTION_CALL,
+        STRING_LITERAL
     };
 
     struct Token
