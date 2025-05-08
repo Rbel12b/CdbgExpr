@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.20)
 # Set C++ standard and compiler flags
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra")
 
 # Source files
 file(GLOB SRC_FILES src/*.cpp)

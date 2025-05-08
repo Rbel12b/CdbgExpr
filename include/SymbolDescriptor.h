@@ -47,27 +47,13 @@ namespace CdbgExpr
         };
         Type type;
 
-        static CType VOID;
-        static CType INT;
-        static CType BOOL;
-        static CType CHAR;
-        static CType SHORT;
-        static CType LONG;
-        static CType LONGLONG;
-        static CType FLOAT;
-        static CType DOUBLE;
-        static CType STRUCT;
-        static CType UNION;
-        static CType POINTER;
-        static CType ARRAY;
-        static CType BITFIELD;
-        static CType UNKNOWN;
-
         char offset;
         size_t size;
+        std::string name;
 
         CType() : type(Type::UNKNOWN) {}
         CType(CType::Type _type) : type(_type) {}
+        CType(CType::Type _type, const std::string& structName) : type(_type), name(structName) {}
 
         bool operator==(const CType& right) const
         {
@@ -77,6 +63,16 @@ namespace CdbgExpr
             }
             return true;
         }
+
+        bool operator==(const CType::Type& right) const
+        {
+            if (right != type)
+            {
+                return false;
+            }
+            return true;
+        }
+        static std::vector<CType> parseCTypeVector(const std::string& typeStr, bool& isUnsigned);
     };
 
     class SymbolDescriptor;
@@ -88,7 +84,10 @@ namespace CdbgExpr
         virtual uint8_t getByte(uint64_t) = 0;
         virtual void setByte(uint64_t, uint8_t) = 0;
         virtual uint8_t CTypeSize(CType) = 0;
-        uint64_t invalidAddress = 0;
+        virtual uint64_t getStackPointer() = 0;
+        virtual uint8_t getRegContent(uint8_t regNum) = 0;
+        virtual void setRegContent(uint8_t regNum, uint8_t val) = 0;
+        uint64_t invalidAddress = 0; // non-valid memory address (eg. nullptr/0)
     };
 
     class Member;
@@ -105,6 +104,11 @@ namespace CdbgExpr
         uint64_t size = 0;
         bool isSigned = false;
         std::unordered_map<std::string, Member> members;
+
+        bool stack = false;
+        int stackOffs = 0;
+
+        std::vector<uint8_t> regs;
 
         // C type information.
         std::vector<CType> cType;
