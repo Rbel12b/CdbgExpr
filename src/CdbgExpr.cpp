@@ -524,7 +524,7 @@ namespace CdbgExpr
 
         if (newType.begin()->type == CType::Type::POINTER)
         {
-            result.value = SymbolDescriptor::value_to_uint64_b(original.value);
+            result.value = original.value;
             return result;
         }
 

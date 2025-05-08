@@ -99,7 +99,7 @@ namespace CdbgExpr
         static bool assignmentAllowed;
 
         std::string name;
-        std::variant<uint64_t, int64_t, double, float> value;
+        uint64_t value;
         bool hasAddress = false;
         uint64_t size = 0;
         bool isSigned = false;
@@ -120,14 +120,14 @@ namespace CdbgExpr
         SymbolDescriptor(int64_t i);
         SymbolDescriptor(uint64_t u);
 
-        static uint64_t value_to_uint64_b(const std::variant<uint64_t, int64_t, double, float> &v);
-        static uint64_t value_to_uint64_n(const std::variant<uint64_t, int64_t, double, float> &v);
-        static int64_t value_to_int64_b(const std::variant<uint64_t, int64_t, double, float> &v);
-        static int64_t value_to_int64_n(const std::variant<uint64_t, int64_t, double, float> &v);
-        static double value_to_double_b(const std::variant<uint64_t, int64_t, double, float> &v);
-        static double value_to_double_n(const std::variant<uint64_t, int64_t, double, float> &v);
-        static float value_to_float_b(const std::variant<uint64_t, int64_t, double, float> &v);
-        static float value_to_float_n(const std::variant<uint64_t, int64_t, double, float> &v);
+        std::variant<uint64_t, int64_t, double, float> getRealValue(const std::vector<uint64_t>& offset = {}) const;
+
+        static uint64_t value_to_uint64_n(uint64_t val, CType type);
+        static int64_t value_to_int64_n(uint64_t val, CType type);
+        static double value_to_double_b(uint64_t val);
+        static double value_to_double_n(uint64_t val, CType type, bool isSigned = false);
+        static float value_to_float_b(uint64_t val);
+        static float value_to_float_n(uint64_t val, CType type, bool isSigned = false);
 
         static CType promoteType(const CType &left, const CType &right);
 
@@ -147,18 +147,22 @@ namespace CdbgExpr
         SymbolDescriptor getMember(const std::string &name) const;
         SymbolDescriptor addressOf() const;
 
-        void setValue(const std::variant<uint64_t, int64_t, double, float>& val);
-        std::variant<uint64_t, int64_t, double, float> getValue() const;
+        void setValue(uint64_t val);
+        uint64_t getValue() const;
+        void setValueAt(uint64_t addr, uint64_t val, uint8_t level = 0);
+        uint64_t getValueAt(uint64_t addr, uint8_t level = 0) const;
 
-        std::string toString(uint8_t level = 0) const;
-        std::string arrayToString(const std::vector<CType>& cType, uint8_t level) const;
+        std::string toString(uint8_t level = 0, uint64_t arrayOffset = 0) const;
+        std::string arrayToString(const std::vector<CType>& cType, uint8_t level, uint64_t arrayOffset = 0) const;
 
         SymbolDescriptor assign(const SymbolDescriptor &right);
 
-        float toFloat() const;
-        double toDouble() const;
-        uint64_t toUnsigned() const;
-        int64_t toSigned() const;
+        SymbolDescriptor getConstLiteral(const std::vector<uint64_t>& offset) const;
+
+        float toFloat(const std::vector<uint64_t>& offset = {}) const;
+        double toDouble(const std::vector<uint64_t>& offset = {}) const;
+        uint64_t toUnsigned(const std::vector<uint64_t>& offset = {}) const;
+        int64_t toSigned(const std::vector<uint64_t>& offset = {}) const;
 
         template <typename Op> SymbolDescriptor applyArithmetic(const SymbolDescriptor &right, Op op) const;
         template <typename Op> SymbolDescriptor applyComparison(const SymbolDescriptor &right, Op op) const;
