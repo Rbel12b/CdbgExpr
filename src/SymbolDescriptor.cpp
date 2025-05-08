@@ -12,6 +12,79 @@ namespace CdbgExpr
     DbgData *SymbolDescriptor::data = nullptr;
     bool SymbolDescriptor::assignmentAllowed = false;
 
+    std::vector<CType> CType::parseCTypeVector(const std::string& typeStr, bool& isUnsigned)
+    {
+        std::vector<CType> result;
+        std::istringstream iss(typeStr);
+        std::string word;
+        bool lastWordLong = false;
+
+        while (iss >> word)
+        {
+            if (word == "*")
+            {
+                result.insert(result.begin(), CType(CType::Type::POINTER));
+            }
+            else if (word == "int")
+            {
+                result.push_back(CType(CType::Type::INT));
+            }
+            else if (word == "float")
+            {
+                result.push_back(CType(CType::Type::FLOAT));
+            }
+            else if (word == "double")
+            {
+                result.push_back(CType(CType::Type::DOUBLE));
+            }
+            else if (word == "char")
+            {
+                result.push_back(CType(CType::Type::CHAR));
+            }
+            else if (word == "bool")
+            {
+                result.push_back(CType(CType::Type::BOOL));
+            }
+            else if (word == "void")
+            {
+                result.push_back(CType(CType::Type::VOID));
+            }
+            else if (word == "long")
+            {
+                if (lastWordLong)
+                {
+                    result.push_back(CType(CType::Type::LONGLONG));
+                    lastWordLong = false;
+                }
+                else
+                {
+                    lastWordLong = true;
+                }
+                continue;
+            }
+            else if (word == "unsigned")
+            {
+                isUnsigned = true;
+            }
+            else if (word == "signed")
+            {
+                isUnsigned = false;
+            }
+            else
+            {
+                // Assume user-defined struct/union type
+                result.insert(result.begin(), CType(CType::Type::STRUCT, word));
+            }
+            if (lastWordLong)
+            {
+                result.push_back(CType(CType::Type::LONG));
+                lastWordLong = false;
+            }
+        }
+
+        return result;
+    }
+
     SymbolDescriptor::SymbolDescriptor(const char* s)
     {
         fromString(std::string(s));

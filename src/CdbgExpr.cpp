@@ -76,7 +76,6 @@ namespace CdbgExpr
                 (c == '0' && i + 1 < expr.size() && (expr[i + 1] == 'x' || expr[i + 1] == 'X' || expr[i + 1] == 'b' || expr[i + 1] == 'B')))
             {
                 token.clear();
-                size_t start = i;
 
                 if (expr[i] == '0' && i + 1 < expr.size() && (expr[i + 1] == 'x' || expr[i + 1] == 'X'))
                 {
@@ -495,11 +494,114 @@ namespace CdbgExpr
     {
         return data->getSymbol(name);
     }
+    CastNode::CastNode(const std::string& type, std::unique_ptr<ASTNode> expr)
+            : typeName(type), expression(std::move(expr)) {}
+
+    SymbolDescriptor CastNode::evaluate()
+    {
+        SymbolDescriptor original = expression->evaluate();
+
+        bool isUnsigned = false;
+        std::vector<CType> newType = CType::parseCTypeVector(typeName, isUnsigned);
+        if (newType.empty())
+            throw std::runtime_error("Invalid cast type: " + typeName);
+            
+        SymbolDescriptor result;
+        result.hasAddress = false;
+        result.cType = newType;
+        result.isSigned = !isUnsigned;
+        
+        CType::Type targetBaseType = newType.back().type;
+        // CType::Type sourceBaseType;
+        // if (original.cType.empty())
+        // {
+        //     sourceBaseType == CType::Type::UNKNOWN;
+        // }
+        // else
+        // {
+        //     sourceBaseType = original.cType.back().type;
+        // }
+
+        if (newType.begin()->type == CType::Type::POINTER)
+        {
+            result.value = SymbolDescriptor::value_to_uint64_b(original.value);
+            return result;
+        }
+
+        switch (targetBaseType)
+        {
+            case CType::Type::INT:
+            case CType::Type::LONG:
+            case CType::Type::LONGLONG:
+                result.value = original.toUnsigned();
+                break;
+            case CType::Type::FLOAT:
+                result.value = original.toFloat();
+                break;
+            case CType::Type::DOUBLE:
+                result.value = original.toDouble();
+                break;
+            case CType::Type::POINTER:
+                result.value = original.toUnsigned();
+                result.hasAddress = true;
+                break;
+            case CType::Type::BOOL:
+                result.value = original.toUnsigned();
+                break;
+            default:
+                throw std::runtime_error("Unsupported cast to type: " + typeName);
+        }
+
+        return result;
+    }
+
+    std::string ExpressionParser::parseCastType() {
+        std::string type;
+        while (index < tokens.size()) {
+            Token tok = tokens[index];
+    
+            if (tok.type == TokenType::PARENTHESIS && tok.value == ")")
+                break;
+    
+            if (tok.type == TokenType::SYMBOL || tok.value == "*" || tok.value == "&") {
+                if (!type.empty()) type += " ";
+                type += tok.value;
+                index++;
+            } else {
+                throw std::runtime_error("Invalid token in type cast: " + tok.value);
+            }
+        }
+    
+        if (type.empty())
+            throw std::runtime_error("Empty type cast");
+    
+        return type;
+    }
 
     std::unique_ptr<ASTNode> ExpressionParser::parsePrimary()
     {
         if (index >= tokens.size())
             throw std::runtime_error("Unexpected end of input, index: " + std::to_string(index));
+
+        if (tokens[index].type == TokenType::PARENTHESIS && tokens[index].value == "(")
+        {
+            size_t savedIndex = index;
+            index++; // consume '('
+
+            try {
+                std::string typeName = parseCastType(); // new function
+                if (index < tokens.size() && tokens[index].value == ")") {
+                    index++; // consume ')'
+                    auto castedExpr = parsePrimary(); // parse the expression being cast
+                    return std::make_unique<CastNode>(typeName, std::move(castedExpr));
+                }
+            } catch (...) {
+                index = savedIndex; // not a cast, rewind
+            }
+
+            // Regular parenthesized expression
+            index = savedIndex;
+        }
 
         Token token = tokens[index++];
         if (token.type == TokenType::NUMBER)

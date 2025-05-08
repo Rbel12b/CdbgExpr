@@ -49,9 +49,11 @@ namespace CdbgExpr
 
         char offset;
         size_t size;
+        std::string name;
 
         CType() : type(Type::UNKNOWN) {}
         CType(CType::Type _type) : type(_type) {}
+        CType(CType::Type _type, const std::string& structName) : type(_type), name(structName) {}
 
         bool operator==(const CType& right) const
         {
@@ -70,6 +72,7 @@ namespace CdbgExpr
             }
             return true;
         }
+        static std::vector<CType> parseCTypeVector(const std::string& typeStr, bool& isUnsigned);
     };
 
     class SymbolDescriptor;

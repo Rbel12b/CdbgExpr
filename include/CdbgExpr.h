@@ -105,6 +105,17 @@ namespace CdbgExpr
         SymbolDescriptor evaluate() override;
     };
 
+    class CastNode : public ASTNode 
+    {
+    public:
+        std::string typeName;
+        std::unique_ptr<ASTNode> expression;
+    
+        CastNode(const std::string& type, std::unique_ptr<ASTNode> expr);
+    
+        SymbolDescriptor evaluate() override;
+    };
+
 
     class ExpressionParser
     {
@@ -112,8 +123,8 @@ namespace CdbgExpr
         size_t index;
         DbgData *debuggerData;
 
+        std::string parseCastType();
         std::unique_ptr<ASTNode> parsePrimary();
-
         std::unique_ptr<ASTNode> parseExpression(int minPrecedence);
 
     public:
