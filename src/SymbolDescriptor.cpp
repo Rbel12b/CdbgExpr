@@ -198,6 +198,19 @@ namespace CdbgExpr
         return val;
     }
 
+    size_t SymbolDescriptor::getItemSize(const std::vector<CType> &cType, uint8_t level)
+    {
+        if (cType.size() <= level)
+        {
+            return 0;
+        }
+        if (cType[level] == CType::Type::ARRAY)
+        {
+            return cType[level].size * getItemSize(cType, level + 1);
+        }
+        return data->CTypeSize(cType[level]);
+    }
+
     CType SymbolDescriptor::promoteType(const CType &left, const CType &right)
     {
         if (data == nullptr)
@@ -359,18 +372,67 @@ namespace CdbgExpr
 
     SymbolDescriptor SymbolDescriptor::dereference(int offset) const
     {
-        if (data == nullptr)
-        {
+        if (!data)
             throw std::runtime_error("DbgData pointer is null");
-        }
-        if (cType.size() < 2 || (cType[0] != CType::Type::POINTER && cType[0] != CType::Type::ARRAY))
-        {
-            throw std::runtime_error("Cannot dereference a non-pointer type");
-        }
-        SymbolDescriptor result = *this;
-        result.cType.erase(result.cType.begin());
-        result.value = getValue() + (offset * data->CTypeSize(result.cType[0]));
+
+        if (cType.empty())
+            throw std::runtime_error("Type stack is empty");
+
+        SymbolDescriptor result;
         result.hasAddress = true;
+        result.cType = cType;
+        result.isSigned = isSigned;
+
+        CType top = cType[0];
+
+        if (top == CType::Type::POINTER)
+        {
+            if (cType.size() < 2)
+                throw std::runtime_error("Pointer type has no pointee");
+
+            // Read the actual pointer value from memory
+            uint64_t pointedAddr = getValue();
+
+            result.cType.erase(result.cType.begin()); // Remove POINTER layer
+            result.hasAddress = false;
+            result.stack = false;
+            result.regs.clear();
+            
+            size_t size = getItemSize(result.cType);
+            result.size = size;
+
+            result.setAddr(pointedAddr + offset * size);
+        }
+        else if (top == CType::Type::ARRAY)
+        {
+            if (cType.size() < 2)
+                throw std::runtime_error("Array type has no element type");
+
+            uint64_t pointedAddr = getValue();
+
+            result.cType.erase(result.cType.begin()); // Remove ARRAY layer
+            result.hasAddress = false;
+            result.stack = false;
+            result.regs.clear();
+            
+            size_t size = getItemSize(result.cType);
+            result.size = size;
+
+            if (cType[1] == CType::Type::ARRAY)
+            {
+                result.setValue(pointedAddr + offset * size);
+            }
+            else
+            {
+                result.setAddr(pointedAddr + offset * size);
+            }
+
+        }
+        else
+        {
+            throw std::runtime_error("Cannot dereference a non-pointer, non-array type");
+        }
+
         return result;
     }
 
@@ -404,7 +466,16 @@ namespace CdbgExpr
         result.cType.insert(result.cType.begin(), CType::Type::POINTER);
         result.value = addr;
         result.hasAddress = false;
+        result.size = getItemSize(result.cType);
         return result;
+    }
+
+    void SymbolDescriptor::setAddr(uint64_t addr)
+    {
+        value = addr;
+        hasAddress = true;
+        stack = false;
+        regs.clear();
     }
 
     void SymbolDescriptor::setValue(uint64_t val)
@@ -491,19 +562,18 @@ namespace CdbgExpr
         return val;
     }
 
-    std::string SymbolDescriptor::toString(uint8_t level, uint64_t arrayOffset) const
+    std::string SymbolDescriptor::typeOf() const
     {
         if (data == nullptr)
         {
             throw std::runtime_error("DbgData pointer is null");
         }
-        if (cType.size() <= level)
+        if (cType.size() <= 0)
             return "<unknown type>";
-
         std::ostringstream result;
 
         result << "(";
-        uint64_t i = level;
+        uint64_t i = 0;
         while (i < cType.size() && (cType[i] == CType::Type::POINTER || cType[i] == CType::Type::ARRAY))
         {
             i++;
@@ -574,7 +644,7 @@ namespace CdbgExpr
             }
         }
 
-        i = level;
+        i = 0;
         while (i < cType.size() && (cType[i] == CType::Type::POINTER || cType[i] == CType::Type::ARRAY))
         {
             if (cType[i] == CType::Type::ARRAY)
@@ -588,10 +658,26 @@ namespace CdbgExpr
             i++;
         }
         result << ") ";
+        return result.str();
+    }
 
-        if (cType.size() > (size_t)(level + 1) && cType[level] == CType::Type::POINTER)
+    std::string SymbolDescriptor::toString() const
+    {
+        if (data == nullptr)
         {
-            if (cType[level + 1] == CType::Type::CHAR)
+            throw std::runtime_error("DbgData pointer is null");
+        }
+        if (cType.size() < 1)
+            return "<unknown type>";
+
+        std::ostringstream result;
+
+        if (cType[0] == CType::Type::POINTER)
+        {
+            if (cType.size() < 2)
+                return "*<unknown type>";
+
+            if (cType[1] == CType::Type::CHAR)
             {
                 if (!getValue())
                 {
@@ -613,22 +699,30 @@ namespace CdbgExpr
             }
             else
             {
+                result << typeOf();
                 result << "0x" << std::hex << getValue();
                 return result.str();
             }
         }
-
-        if (cType[level] == CType::Type::ARRAY)
+        else if (cType[0] == CType::Type::ARRAY)
         {
-            result << arrayToString(cType, level, arrayOffset);
+            if (cType.size() < 2)
+                return "<unknown type>[]";
+            result << "[";
+            for (size_t i = 0; i < cType[0].size; i++)
+            {
+                result << dereference(i).toString();
+                if (i != cType[0].size - 1)
+                {
+                    result << ", ";
+                }
+            }
+            result << "]";
             return result.str();
         }
-
-        CType baseType = cType.back();
-
-        if (baseType == CType::Type::STRUCT)
+        else if (cType[0] == CType::Type::STRUCT)
         {
-            result << baseType.name;
+            result << cType[0].name;
             result << "{";
             for (auto& member : members)
             {
@@ -645,35 +739,7 @@ namespace CdbgExpr
                 { return std::to_string(value); }, getRealValue());
         }
 
-        return result.str() + "<unsupported type>";
-    }
-
-    std::string SymbolDescriptor::arrayToString(const std::vector<CType> &cType, uint8_t level, uint64_t arrayOffset) const
-    {
-        std::string result;
-        if ((size_t)(level + 1) >= cType.size())
-        {
-            return result;
-        }
-        uint64_t itemSize = SymbolDescriptor::data->CTypeSize(cType[level + 1]);
-        result += "[";
-        for (size_t i = 0; i < cType[level].size; i++)
-        {
-            if (cType[level + 1] == CType::Type::ARRAY)
-            {
-                result += arrayToString(cType, level + 1, arrayOffset + (itemSize * i));
-            }
-            else
-            {
-                result += toString(level + 1);
-            }
-            if (i != cType[level].size - 1)
-            {
-                result += ", ";
-            }
-        }
-        result += "]";
-        return result;
+        return "<unknown type>";
     }
 
     SymbolDescriptor SymbolDescriptor::assign(const SymbolDescriptor &right)

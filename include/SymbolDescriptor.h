@@ -129,6 +129,7 @@ namespace CdbgExpr
         static float value_to_float_b(uint64_t val);
         static float value_to_float_n(uint64_t val, CType type, bool isSigned = false);
 
+        static size_t getItemSize(const std::vector<CType>& cType, uint8_t level = 0);
         static CType promoteType(const CType &left, const CType &right);
 
         void fromString(const std::string &str);
@@ -147,13 +148,15 @@ namespace CdbgExpr
         SymbolDescriptor getMember(const std::string &name) const;
         SymbolDescriptor addressOf() const;
 
+        void setAddr(uint64_t addr);
+
         void setValue(uint64_t val);
         uint64_t getValue() const;
         void setValueAt(uint64_t addr, uint64_t val, uint8_t level = 0);
         uint64_t getValueAt(uint64_t addr, uint8_t level = 0) const;
 
-        std::string toString(uint8_t level = 0, uint64_t arrayOffset = 0) const;
-        std::string arrayToString(const std::vector<CType>& cType, uint8_t level, uint64_t arrayOffset = 0) const;
+        std::string typeOf() const;
+        std::string toString() const;
 
         SymbolDescriptor assign(const SymbolDescriptor &right);
 
