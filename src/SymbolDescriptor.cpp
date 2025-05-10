@@ -657,7 +657,7 @@ namespace CdbgExpr
             }
             i++;
         }
-        result << ") ";
+        result << ")";
         return result.str();
     }
 
