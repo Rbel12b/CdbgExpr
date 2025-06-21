@@ -29,7 +29,7 @@ namespace CdbgExpr
     public:
         enum class Type
         {
-            VOID,
+            VOID_type,
             INT,
             BOOL,
             CHAR,

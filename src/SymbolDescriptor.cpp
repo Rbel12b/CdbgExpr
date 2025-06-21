@@ -47,7 +47,7 @@ namespace CdbgExpr
             }
             else if (word == "void")
             {
-                result.push_back(CType(CType::Type::VOID));
+                result.push_back(CType(CType::Type::VOID_type));
             }
             else if (word == "long")
             {
@@ -584,7 +584,7 @@ namespace CdbgExpr
             return result.str();
         }
         if (!isSigned && cType[i] != CType::Type::STRUCT && cType[i] != CType::Type::BOOL &&
-            cType[i] != CType::Type::FLOAT && cType[i] != CType::Type::DOUBLE && cType[i] != CType::Type::VOID)
+            cType[i] != CType::Type::FLOAT && cType[i] != CType::Type::DOUBLE && cType[i] != CType::Type::VOID_type)
         {
             result << "unsigned ";
         }
@@ -602,7 +602,7 @@ namespace CdbgExpr
                 result << " ";
             }
             
-            if (cType[i] == CType::Type::VOID)
+            if (cType[i] == CType::Type::VOID_type)
             {
                 result << "void";
             }
