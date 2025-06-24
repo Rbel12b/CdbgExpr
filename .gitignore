@@ -1,3 +1,4 @@
-*.o
-*.a
-.stamp
+# cmake files
+CMake*
+!CMakeLists.txt
+build
